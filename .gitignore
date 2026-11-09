@@ -52,3 +52,10 @@ prompt
 server.log
 # Skills directory
 /skills/
+
+# локальные данные и загрузки пользователя (не публикуются)
+/db
+/upload
+/download
+/agent-ctx
+whiteboard-github.zip
