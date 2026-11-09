@@ -54,3 +54,112 @@ export function hitTest(el: Element, p: Point, tol = 10): boolean {
     }
   }
 }
+
+/* ---------- лассо ---------- */
+
+/** Лучевой тест точки на попадание в многоугольник */
+export function pointInPolygon(p: Point, poly: Point[]): boolean {
+  let inside = false
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const xi = poly[i].x
+    const yi = poly[i].y
+    const xj = poly[j].x
+    const yj = poly[j].y
+    const intersect = yi > p.y !== yj > p.y && p.x < ((xj - xi) * (p.y - yi)) / (yj - yi) + xi
+    if (intersect) inside = !inside
+  }
+  return inside
+}
+
+/** Характерные точки элемента для проверки попадания в лассо */
+export function elementSamples(el: Element): Point[] {
+  switch (el.kind) {
+    case 'pen': {
+      const pts = el.points
+      if (pts.length <= 12) return pts
+      const out: Point[] = []
+      const step = (pts.length - 1) / 11
+      for (let i = 0; i < 12; i++) out.push(pts[Math.round(i * step)])
+      out.push(pts[pts.length - 1])
+      return out
+    }
+    case 'line':
+    case 'arrow':
+      return [
+        { x: el.x1, y: el.y1 },
+        { x: (el.x1 + el.x2) / 2, y: (el.y1 + el.y2) / 2 },
+        { x: el.x2, y: el.y2 },
+      ]
+    case 'ellipse': {
+      const b = normRect(el.x, el.y, el.w, el.h)
+      const cx = b.x + b.w / 2
+      const cy = b.y + b.h / 2
+      return [
+        { x: cx, y: b.y },
+        { x: cx, y: b.y + b.h },
+        { x: b.x, y: cy },
+        { x: b.x + b.w, y: cy },
+        { x: cx, y: cy },
+      ]
+    }
+    case 'triangle': {
+      const b = normRect(el.x, el.y, el.w, el.h)
+      return [
+        { x: b.x + b.w / 2, y: b.y },
+        { x: b.x + b.w, y: b.y + b.h },
+        { x: b.x, y: b.y + b.h },
+        { x: b.x + b.w / 2, y: b.y + b.h / 2 },
+      ]
+    }
+    default: {
+      const b = bboxOf(el)
+      return [
+        { x: b.x, y: b.y },
+        { x: b.x + b.w, y: b.y },
+        { x: b.x, y: b.y + b.h },
+        { x: b.x + b.w, y: b.y + b.h },
+        { x: b.x + b.w / 2, y: b.y + b.h / 2 },
+      ]
+    }
+  }
+}
+
+/** Лассо: элементы, у которых хотя бы одна характерная точка внутри обводки */
+export function lassoSelect(elements: Element[], poly: Point[]): string[] {
+  if (poly.length < 3) return []
+  return elements.filter((el) => elementSamples(el).some((pt) => pointInPolygon(pt, poly))).map((el) => el.id)
+}
+
+/** Смещение элемента на (dx, dy) — для перетаскивания лассо */
+export function translateElement(el: Element, dx: number, dy: number): Element {
+  switch (el.kind) {
+    case 'pen':
+      return { ...el, points: el.points.map((p) => ({ x: p.x + dx, y: p.y + dy })) }
+    case 'line':
+    case 'arrow':
+      return { ...el, x1: el.x1 + dx, y1: el.y1 + dy, x2: el.x2 + dx, y2: el.y2 + dy }
+    default:
+      return { ...el, x: el.x + dx, y: el.y + dy }
+  }
+}
+
+/** Общий bbox набора элементов (для рамки выделения и старта перетаскивания) */
+export function unionBbox(elements: Element[]): { x: number; y: number; w: number; h: number } | null {
+  if (elements.length === 0) return null
+  let minX = Infinity
+  let minY = Infinity
+  let maxX = -Infinity
+  let maxY = -Infinity
+  for (const el of elements) {
+    const b = bboxOf(el)
+    minX = Math.min(minX, b.x)
+    minY = Math.min(minY, b.y)
+    maxX = Math.max(maxX, b.x + b.w)
+    maxY = Math.max(maxY, b.y + b.h)
+  }
+  return { x: minX, y: minY, w: maxX - minX, h: maxY - minY }
+}
+
+export function pointInRect(p: Point, r: { x: number; y: number; w: number; h: number }, pad = 0): boolean {
+  return p.x >= r.x - pad && p.x <= r.x + r.w + pad && p.y >= r.y - pad && p.y <= r.y + r.h + pad
+}

@@ -1,13 +1,13 @@
 'use client'
 
 import { useState } from 'react'
-import { Pencil, Eraser, Slash, ArrowUpRight, Square, Circle, Triangle, Box, LayoutGrid, Sun, Grid3x3, Moon, Undo2, Redo2, Trash2, Download } from 'lucide-react'
+import { Pencil, Eraser, Lasso, Slash, ArrowUpRight, Square, Circle, Triangle, Box, LayoutGrid, Sun, Moon, Undo2, Redo2, Trash2, Download } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Separator } from '@/components/ui/separator'
 import { cn } from '@/lib/utils'
 import type { BgMode, Shape3D, TemplateKind, ToolKind } from '@/lib/whiteboard/types'
-import { SHAPE3D_LABELS, SHAPE3D_ORDER, TEMPLATE_LABELS } from '@/lib/whiteboard/types'
+import { SHAPE3D_LABELS, SHAPE3D_ORDER, TEMPLATE_LABELS, TEMPLATE_ORDER } from '@/lib/whiteboard/types'
 import { Shape3DIcon, TemplateIcon } from './icons'
 
 interface ToolbarProps {
@@ -18,7 +18,7 @@ interface ToolbarProps {
   template: TemplateKind
   onTemplateChange: (t: TemplateKind) => void
   bg: BgMode
-  onBgChange: (b: BgMode) => void
+  onBgToggle: () => void
   canUndo: boolean
   canRedo: boolean
   onUndo: () => void
@@ -64,7 +64,7 @@ export function Toolbar({
   template,
   onTemplateChange,
   bg,
-  onBgChange,
+  onBgToggle,
   canUndo,
   canRedo,
   onUndo,
@@ -87,6 +87,9 @@ export function Toolbar({
         </ToolBtn>
         <ToolBtn active={tool === 'eraser'} label="Ластик (E)" onClick={() => onToolChange('eraser')}>
           <Eraser className="h-4 w-4" />
+        </ToolBtn>
+        <ToolBtn active={tool === 'lasso'} label="Лассо: обведите и перетащите (S)" onClick={() => onToolChange('lasso')}>
+          <Lasso className="h-4 w-4" />
         </ToolBtn>
 
         <Divider />
@@ -157,7 +160,7 @@ export function Toolbar({
               variant="ghost"
               size="icon"
               aria-label="Шаблоны для уроков"
-              title="Шаблоны: координатная плоскость, числовая ось, таблица"
+              title="Шаблоны: координатная плоскость, числовая ось"
               className={cn('h-9 w-9 rounded-full shrink-0', tool === 'template' && 'bg-accent text-accent-foreground')}
             >
               <LayoutGrid className="h-4 w-4" />
@@ -165,7 +168,7 @@ export function Toolbar({
           </PopoverTrigger>
           <PopoverContent className="w-72 p-1.5" align="center">
             <div className="px-2 py-1.5 text-xs font-medium text-muted-foreground">Шаблоны — кликните на холсте, чтобы вставить</div>
-            {(Object.keys(TEMPLATE_LABELS) as TemplateKind[]).map((t) => (
+            {TEMPLATE_ORDER.map((t) => (
               <button
                 key={t}
                 type="button"
@@ -189,15 +192,12 @@ export function Toolbar({
 
         <Divider />
 
-        {/* Фон */}
-        <ToolBtn active={bg === 'white'} label="Белый фон" onClick={() => onBgChange('white')}>
-          <Sun className="h-4 w-4" />
-        </ToolBtn>
-        <ToolBtn active={bg === 'grid'} label="Клетка, как в тетради" onClick={() => onBgChange('grid')}>
-          <Grid3x3 className="h-4 w-4" />
-        </ToolBtn>
-        <ToolBtn active={bg === 'black'} label="Чёрный фон" onClick={() => onBgChange('black')}>
-          <Moon className="h-4 w-4" />
+        {/* Фон: одна кнопка, белый ↔ чёрный (сетка всегда на белом) */}
+        <ToolBtn
+          label={bg === 'black' ? 'Белый фон (сетка включена)' : 'Чёрный фон'}
+          onClick={onBgToggle}
+        >
+          {bg === 'black' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
         </ToolBtn>
 
         <Divider />

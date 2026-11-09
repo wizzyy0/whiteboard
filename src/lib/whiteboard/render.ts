@@ -1,34 +1,60 @@
-import type { BgMode, Element, Shape3D, TemplateKind } from './types'
+import type { BgMode, Camera, Element, LineType, Shape3D, TemplateKind } from './types'
+import { normRect } from './types'
 
 export const GRID_SIZE = 28
 export const GRID_COLOR = '#dcdcdc'
 
 export const BG_COLORS: Record<BgMode, string> = {
   white: '#ffffff',
-  grid: '#ffffff',
   black: '#101010',
 }
 
-const DASH: number[] = [7, 5]
+const SELECT_COLOR = '#1971c2'
 
-export function drawBackground(ctx: CanvasRenderingContext2D, mode: BgMode, w: number, h: number) {
+/* ---------- камера ---------- */
+
+/** Устанавливает трансформацию мира: экранные = мировые * zoom + камера */
+export function applyCamera(ctx: CanvasRenderingContext2D, cam: Camera, dpr: number) {
+  ctx.setTransform(dpr * cam.zoom, 0, 0, dpr * cam.zoom, dpr * cam.x, dpr * cam.y)
+}
+
+/** Фон: заливка в экранных координатах, сетка — только на белом, привязана к миру.
+ *  После вызова контекст остаётся в трансформации камеры (мировые координаты). */
+export function drawBackground(
+  ctx: CanvasRenderingContext2D,
+  mode: BgMode,
+  w: number,
+  h: number,
+  cam: Camera,
+  dpr: number,
+) {
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
   ctx.fillStyle = BG_COLORS[mode]
   ctx.fillRect(0, 0, w, h)
-  if (mode === 'grid') {
-    ctx.save()
-    ctx.strokeStyle = GRID_COLOR
-    ctx.lineWidth = 1
-    ctx.beginPath()
-    for (let gx = 0.5; gx <= w; gx += GRID_SIZE) {
-      ctx.moveTo(gx, 0)
-      ctx.lineTo(gx, h)
+  applyCamera(ctx, cam, dpr)
+  if (mode === 'white') {
+    // сетка «как в тетради» — всегда на белом поле, шаг фиксирован в мировых координатах
+    const pxStep = GRID_SIZE * cam.zoom
+    if (pxStep >= 6) {
+      const x0 = Math.floor(-cam.x / cam.zoom / GRID_SIZE) * GRID_SIZE
+      const y0 = Math.floor(-cam.y / cam.zoom / GRID_SIZE) * GRID_SIZE
+      const x1 = (w - cam.x) / cam.zoom
+      const y1 = (h - cam.y) / cam.zoom
+      ctx.save()
+      ctx.strokeStyle = GRID_COLOR
+      ctx.lineWidth = 1 / cam.zoom
+      ctx.beginPath()
+      for (let gx = x0; gx <= x1; gx += GRID_SIZE) {
+        ctx.moveTo(gx, y0)
+        ctx.lineTo(gx, y1)
+      }
+      for (let gy = y0; gy <= y1; gy += GRID_SIZE) {
+        ctx.moveTo(x0, gy)
+        ctx.lineTo(x1, gy)
+      }
+      ctx.stroke()
+      ctx.restore()
     }
-    for (let gy = 0.5; gy <= h; gy += GRID_SIZE) {
-      ctx.moveTo(0, gy)
-      ctx.lineTo(w, gy)
-    }
-    ctx.stroke()
-    ctx.restore()
   }
 }
 
@@ -45,6 +71,7 @@ function arrowHead(ctx: CanvasRenderingContext2D, x1: number, y1: number, x2: nu
   const ang = Math.atan2(y2 - y1, x2 - x1)
   const ah = 9 + sw * 1.8
   const a = Math.PI / 7
+  ctx.setLineDash([])
   ctx.beginPath()
   ctx.moveTo(x2, y2)
   ctx.lineTo(x2 - ah * Math.cos(ang - a), y2 - ah * Math.sin(ang - a))
@@ -53,6 +80,7 @@ function arrowHead(ctx: CanvasRenderingContext2D, x1: number, y1: number, x2: nu
   ctx.stroke()
 }
 
+/** Обычное (сглаженное) перо */
 function strokePen(ctx: CanvasRenderingContext2D, pts: { x: number; y: number }[]) {
   if (pts.length === 1) {
     ctx.beginPath()
@@ -72,14 +100,87 @@ function strokePen(ctx: CanvasRenderingContext2D, pts: { x: number; y: number }[
   ctx.stroke()
 }
 
+/* ---------- типы линии: сплошная / пунктир / волнистая ---------- */
+
+function applyLineType(ctx: CanvasRenderingContext2D, lt: LineType, lw: number) {
+  if (lt === 'dashed') ctx.setLineDash([lw * 3, lw * 2.4])
+  else ctx.setLineDash([])
+}
+
+/**
+ * Волновая деформация полилинии: смещение по нормали по синусу.
+ * Для замкнутых контуров подбираем целое число волн — шва нет.
+ * Концы открытых линий «затухают», чтобы линия точно попадала в точки.
+ */
+export function wavePolyline(pts: { x: number; y: number }[], closed: boolean, lw: number): { x: number; y: number }[] {
+  const n = pts.length
+  if (n < 2) return pts
+  const segs: { ax: number; ay: number; dx: number; dy: number; len: number }[] = []
+  let total = 0
+  const count = closed ? n : n - 1
+  for (let i = 0; i < count; i++) {
+    const a = pts[i]
+    const b = pts[(i + 1) % n]
+    const dx = b.x - a.x
+    const dy = b.y - a.y
+    const len = Math.hypot(dx, dy)
+    if (len > 1e-9) {
+      segs.push({ ax: a.x, ay: a.y, dx, dy, len })
+      total += len
+    }
+  }
+  if (segs.length === 0 || total < lw * 2) return pts
+
+  const amp = lw * 1.1
+  let wl = Math.max(lw * 4.5, 2)
+  if (closed) {
+    const k = Math.max(1, Math.round(total / wl))
+    wl = total / k
+  }
+  const step = Math.max(wl / 10, 0.8)
+  const taper = Math.min(wl * 0.75, total / 3)
+
+  const out: { x: number; y: number }[] = []
+  let idx = 0
+  let acc = 0 // накопленная длина до начала сегмента idx
+  for (let d = 0; d <= total + 1e-6; d += step) {
+    const dd = Math.min(d, total)
+    while (idx < segs.length - 1 && dd - acc > segs[idx].len) {
+      acc += segs[idx].len
+      idx++
+    }
+    const s = segs[idx]
+    const t = Math.min(1, (dd - acc) / s.len)
+    const inv = 1 / s.len
+    const tx = s.dx * inv
+    const ty = s.dy * inv
+    let a = amp * Math.sin((dd / wl) * Math.PI * 2)
+    if (!closed) a *= Math.max(0, Math.min(1, dd / taper, (total - dd) / taper))
+    out.push({ x: s.ax + s.dx * t - ty * a, y: s.ay + s.dy * t + tx * a })
+  }
+  if (!closed) {
+    // точный конечный пункт (амплитуда там 0)
+    const s = segs[segs.length - 1]
+    out.push({ x: s.ax + s.dx, y: s.ay + s.dy })
+  }
+  return out
+}
+
+function strokePolyline(ctx: CanvasRenderingContext2D, pts: { x: number; y: number }[]) {
+  ctx.beginPath()
+  ctx.moveTo(pts[0].x, pts[0].y)
+  for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y)
+  ctx.stroke()
+}
+
 /* ---------- 3D-тела: сплошные видимые линии + пунктирные невидимые ---------- */
 
 function solid(ctx: CanvasRenderingContext2D) {
   ctx.setLineDash([])
 }
 
-function hidden(ctx: CanvasRenderingContext2D) {
-  ctx.setLineDash(DASH)
+function hidden(ctx: CanvasRenderingContext2D, zoom: number) {
+  ctx.setLineDash([7 / zoom, 5 / zoom])
 }
 
 export function drawShape3D(
@@ -89,6 +190,7 @@ export function drawShape3D(
   y0: number,
   w0: number,
   h0: number,
+  zoom = 1,
 ) {
   // нормализация к положительным размерам
   let x = x0
@@ -125,7 +227,7 @@ export function drawShape3D(
       line(ctx, x + dx, y + dy, x2 + dx, y + dy) // заднее верхнее
       line(ctx, x2 + dx, y + dy, x2 + dx, y2 + dy) // заднее правое вертикальное
       // невидимые: три ребра сходятся в дальнюю нижне-левую вершину
-      hidden(ctx)
+      hidden(ctx, zoom)
       line(ctx, x, y2, x + dx, y2 + dy)
       line(ctx, x + dx, y2 + dy, x2 + dx, y2 + dy)
       line(ctx, x + dx, y2 + dy, x + dx, y + dy)
@@ -145,7 +247,7 @@ export function drawShape3D(
       line(ctx, apex.x, apex.y, bl.x, bl.y)
       line(ctx, apex.x, apex.y, br.x, br.y)
       line(ctx, apex.x, apex.y, brp.x, brp.y)
-      hidden(ctx)
+      hidden(ctx, zoom)
       line(ctx, bl.x, bl.y, blp.x, blp.y)
       line(ctx, blp.x, blp.y, brp.x, brp.y)
       line(ctx, blp.x, blp.y, apex.x, apex.y)
@@ -168,7 +270,7 @@ export function drawShape3D(
       line(ctx, br.x, br.y, brp.x, brp.y)
       line(ctx, top.x, top.y, topp.x, topp.y)
       line(ctx, brp.x, brp.y, topp.x, topp.y)
-      hidden(ctx)
+      hidden(ctx, zoom)
       line(ctx, bl.x, bl.y, blp.x, blp.y)
       line(ctx, blp.x, blp.y, brp.x, brp.y)
       line(ctx, blp.x, blp.y, topp.x, topp.y)
@@ -189,7 +291,7 @@ export function drawShape3D(
       ctx.beginPath()
       ctx.ellipse(cx, botCy, rx, ry, 0, 0, Math.PI) // передняя (нижняя) половина
       ctx.stroke()
-      hidden(ctx)
+      hidden(ctx, zoom)
       ctx.beginPath()
       ctx.ellipse(cx, botCy, rx, ry, 0, Math.PI, Math.PI * 2) // задняя половина
       ctx.stroke()
@@ -206,7 +308,7 @@ export function drawShape3D(
       ctx.beginPath()
       ctx.ellipse(cx, botCy, rx, ry, 0, 0, Math.PI)
       ctx.stroke()
-      hidden(ctx)
+      hidden(ctx, zoom)
       ctx.beginPath()
       ctx.ellipse(cx, botCy, rx, ry, 0, Math.PI, Math.PI * 2)
       ctx.stroke()
@@ -220,7 +322,7 @@ export function drawShape3D(
       ctx.beginPath()
       ctx.arc(cx, cy, r, 0, Math.PI * 2)
       ctx.stroke()
-      hidden(ctx)
+      hidden(ctx, zoom)
       ctx.beginPath()
       ctx.ellipse(cx, cy, r, r * 0.32, 0, 0, Math.PI * 2) // экватор
       ctx.stroke()
@@ -240,6 +342,7 @@ function templateFont(unit: number): string {
   return `${size}px sans-serif`
 }
 
+/** Координатная плоскость: оси со стрелками и засечками, БЕЗ числовых значений */
 export function drawTemplate(
   ctx: CanvasRenderingContext2D,
   kind: TemplateKind,
@@ -266,6 +369,7 @@ export function drawTemplate(
   w = Math.max(w, 2)
   h = Math.max(h, 2)
   ctx.save()
+  ctx.setLineDash([])
   ctx.strokeStyle = color
   ctx.fillStyle = color
   ctx.lineWidth = sw
@@ -281,34 +385,14 @@ export function drawTemplate(
     arrowHead(ctx, x + w - m - 0.1, cy, x + w - m, cy, mini ? 1 : Math.min(sw, 2.5))
     line(ctx, cx, y + h - m, cx, y + m)
     arrowHead(ctx, cx, y + m + 0.1, cx, y + m, mini ? 1 : Math.min(sw, 2.5))
-    if (!mini) {
-      ctx.font = templateFont(unit)
-      ctx.textAlign = 'center'
-      ctx.textBaseline = 'top'
-      const step = unit >= 20 ? 1 : 2
-      for (let n = -10; n <= 10; n++) {
-        if (n === 0) continue
-        const px = cx + n * unit
-        if (px < x + m + 2 || px > x + w - m - 2) continue
-        line(ctx, px, cy - 3, px, cy + 3)
-        ctx.fillText(String(n), px, cy + 7)
-      }
-      for (let n = -10; n <= 10; n++) {
-        if (n === 0) continue
-        const py = cy - n * unit
-        if (py < y + m + 2 || py > y + h - m - 2) continue
-        line(ctx, cx - 3, py, cx + 3, py)
-        ctx.textAlign = 'right'
-        ctx.textBaseline = 'middle'
-        ctx.fillText(String(n), cx - 7, py)
-      }
-      ctx.textAlign = 'right'
-      ctx.textBaseline = 'top'
-      ctx.fillText('0', cx - 6, cy + 6)
-      ctx.textAlign = 'right'
-      ctx.fillText('x', x + w - 4, cy + 8)
-      ctx.textAlign = 'left'
-      ctx.fillText('y', cx + 8, y + 4)
+    // засечки без подписей значений
+    const tick = mini ? 2 : 3.5
+    for (let n = -10; n <= 10; n++) {
+      if (n === 0) continue
+      const px = cx + n * unit
+      if (px >= x + m + 2 && px <= x + w - m - 2) line(ctx, px, cy - tick, px, cy + tick)
+      const py = cy - n * unit
+      if (py >= y + m + 2 && py <= y + h - m - 2) line(ctx, cx - tick, py, cx + tick, py)
     }
   }
 
@@ -336,6 +420,7 @@ export function drawTemplate(
   }
 
   if (kind === 'table') {
+    // легаси: раньше был в меню
     const cols = 4
     const rows = 4
     ctx.strokeRect(x, y, w, h)
@@ -347,69 +432,163 @@ export function drawTemplate(
 
 /* ---------- диспетчер отрисовки элементов ---------- */
 
-export function drawElement(ctx: CanvasRenderingContext2D, el: Element) {
+/** zoom нужен, чтобы толщина линии оставалась постоянной НА ЭКРАНЕ при любом зуме */
+export function drawElement(ctx: CanvasRenderingContext2D, el: Element, zoom = 1) {
   ctx.save()
   ctx.strokeStyle = el.color
   ctx.fillStyle = el.color
-  ctx.lineWidth = el.strokeWidth
+  const lw = el.strokeWidth / zoom
+  ctx.lineWidth = lw
   ctx.lineCap = 'round'
   ctx.lineJoin = 'round'
   ctx.setLineDash([])
+  const lt: LineType = el.lineType ?? 'solid'
 
   switch (el.kind) {
-    case 'pen':
-      strokePen(ctx, el.points)
+    case 'pen': {
+      if (lt === 'wavy') {
+        const waved = wavePolyline(el.points, false, lw)
+        if (waved.length === 1) {
+          ctx.beginPath()
+          ctx.arc(waved[0].x, waved[0].y, lw / 2, 0, Math.PI * 2)
+          ctx.fill()
+        } else {
+          strokePolyline(ctx, waved)
+        }
+      } else {
+        applyLineType(ctx, lt, lw)
+        strokePen(ctx, el.points)
+      }
       break
-    case 'line':
-      line(ctx, el.x1, el.y1, el.x2, el.y2)
+    }
+    case 'line': {
+      const a = { x: el.x1, y: el.y1 }
+      const b = { x: el.x2, y: el.y2 }
+      if (lt === 'wavy') {
+        ctx.setLineDash([])
+        strokePolyline(ctx, wavePolyline([a, b], false, lw))
+      } else {
+        applyLineType(ctx, lt, lw)
+        line(ctx, a.x, a.y, b.x, b.y)
+      }
       break
-    case 'arrow':
-      line(ctx, el.x1, el.y1, el.x2, el.y2)
-      arrowHead(ctx, el.x1, el.y1, el.x2, el.y2, el.strokeWidth)
+    }
+    case 'arrow': {
+      const a = { x: el.x1, y: el.y1 }
+      const b = { x: el.x2, y: el.y2 }
+      if (lt === 'wavy') {
+        ctx.setLineDash([])
+        strokePolyline(ctx, wavePolyline([a, b], false, lw))
+      } else {
+        applyLineType(ctx, lt, lw)
+        line(ctx, a.x, a.y, b.x, b.y)
+      }
+      arrowHead(ctx, a.x, a.y, b.x, b.y, el.strokeWidth)
       break
+    }
     case 'rect': {
-      const b = norm(el.x, el.y, el.w, el.h)
+      const b = normRect(el.x, el.y, el.w, el.h)
       if (b.w < 1 && b.h < 1) {
         ctx.beginPath()
-        ctx.arc(el.x, el.y, ctx.lineWidth / 2, 0, Math.PI * 2)
+        ctx.arc(el.x, el.y, lw / 2, 0, Math.PI * 2)
         ctx.fill()
+      } else if (lt === 'wavy') {
+        ctx.setLineDash([])
+        const pts = [
+          { x: b.x, y: b.y },
+          { x: b.x + b.w, y: b.y },
+          { x: b.x + b.w, y: b.y + b.h },
+          { x: b.x, y: b.y + b.h },
+        ]
+        strokePolyline(ctx, wavePolyline(pts, true, lw))
       } else {
+        applyLineType(ctx, lt, lw)
         ctx.strokeRect(b.x, b.y, b.w, b.h)
       }
       break
     }
     case 'ellipse': {
-      const b = norm(el.x, el.y, el.w, el.h)
+      const b = normRect(el.x, el.y, el.w, el.h)
+      const rx = Math.max(b.w / 2, 0.5)
+      const ry = Math.max(b.h / 2, 0.5)
+      const cx = b.x + rx
+      const cy = b.y + ry
       ctx.beginPath()
-      ctx.ellipse(b.x + b.w / 2, b.y + b.h / 2, Math.max(b.w / 2, 0.5), Math.max(b.h / 2, 0.5), 0, 0, Math.PI * 2)
-      ctx.stroke()
+      ctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2)
+      if (lt === 'wavy') {
+        ctx.setLineDash([])
+        const pts: { x: number; y: number }[] = []
+        const N = 64
+        for (let i = 0; i < N; i++) {
+          const t = (i / N) * Math.PI * 2
+          pts.push({ x: cx + rx * Math.cos(t), y: cy + ry * Math.sin(t) })
+        }
+        strokePolyline(ctx, wavePolyline(pts, true, lw))
+      } else {
+        applyLineType(ctx, lt, lw)
+        ctx.stroke()
+      }
       break
     }
     case 'triangle': {
-      const b = norm(el.x, el.y, el.w, el.h)
-      ctx.beginPath()
-      ctx.moveTo(b.x + b.w / 2, b.y)
-      ctx.lineTo(b.x + b.w, b.y + b.h)
-      ctx.lineTo(b.x, b.y + b.h)
-      ctx.closePath()
-      ctx.stroke()
+      const b = normRect(el.x, el.y, el.w, el.h)
+      const pts = [
+        { x: b.x + b.w / 2, y: b.y },
+        { x: b.x + b.w, y: b.y + b.h },
+        { x: b.x, y: b.y + b.h },
+      ]
+      if (lt === 'wavy') {
+        ctx.setLineDash([])
+        strokePolyline(ctx, wavePolyline(pts, true, lw))
+      } else {
+        applyLineType(ctx, lt, lw)
+        ctx.beginPath()
+        ctx.moveTo(pts[0].x, pts[0].y)
+        ctx.lineTo(pts[1].x, pts[1].y)
+        ctx.lineTo(pts[2].x, pts[2].y)
+        ctx.closePath()
+        ctx.stroke()
+      }
       break
     }
     case 'shape3d':
-      drawShape3D(ctx, el.shape, el.x, el.y, el.w, el.h)
+      drawShape3D(ctx, el.shape, el.x, el.y, el.w, el.h, zoom)
       break
     case 'template':
-      drawTemplate(ctx, el.template, el.x, el.y, el.w, el.h, el.color, Math.min(el.strokeWidth, 2.5))
+      drawTemplate(
+        ctx,
+        el.template,
+        el.x,
+        el.y,
+        el.w,
+        el.h,
+        el.color,
+        Math.min(el.strokeWidth, 2.5) / zoom,
+      )
       break
   }
   ctx.restore()
 }
 
-function norm(x: number, y: number, w: number, h: number) {
-  return {
-    x: w >= 0 ? x : x + w,
-    y: h >= 0 ? y : y + h,
-    w: Math.abs(w),
-    h: Math.abs(h),
-  }
+/* ---------- оверлеи выделения и лассо (в мировых координатах) ---------- */
+
+function dashedRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, zoom: number) {
+  ctx.save()
+  ctx.strokeStyle = SELECT_COLOR
+  ctx.lineWidth = 1.5 / zoom
+  ctx.setLineDash([5 / zoom, 4 / zoom])
+  ctx.strokeRect(x, y, w, h)
+  ctx.restore()
+}
+
+/* оверлеи выделения и лассо рисуются в Whiteboard — здесь утилита рамки */
+export function strokeSelectionBox(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  zoom: number,
+) {
+  dashedRect(ctx, x, y, w, h, zoom)
 }

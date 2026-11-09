@@ -1,13 +1,16 @@
-export type BgMode = 'white' | 'grid' | 'black'
+export type BgMode = 'white' | 'black'
 
 /** Тела, которые рисуются «как в учебнике геометрии»: видимые линии сплошные, невидимые — пунктиром */
 export type Shape3D = 'cube' | 'cuboid' | 'pyramid' | 'prism' | 'cylinder' | 'cone' | 'sphere'
 
-export type TemplateKind = 'coords' | 'numberline' | 'table'
+export type TemplateKind = 'coords' | 'numberline' | 'table' // table — легаси, больше не в меню
+
+export type LineType = 'solid' | 'dashed' | 'wavy'
 
 export type ToolKind =
   | 'pen'
   | 'eraser'
+  | 'lasso'
   | 'line'
   | 'arrow'
   | 'rect'
@@ -21,10 +24,22 @@ export interface Point {
   y: number
 }
 
+export interface Camera {
+  x: number
+  y: number
+  zoom: number
+}
+
+export const MIN_ZOOM = 0.1
+export const MAX_ZOOM = 9
+
+export const DEFAULT_CAMERA: Camera = { x: 0, y: 0, zoom: 1 }
+
 interface BaseElement {
   id: string
   color: string
   strokeWidth: number
+  lineType?: LineType
 }
 
 export type Element = BaseElement &
@@ -40,6 +55,7 @@ export interface PageState {
   elements: Element[]
   past: Element[][]
   future: Element[][]
+  camera: Camera
 }
 
 export interface WhiteboardSnapshot {
@@ -49,6 +65,7 @@ export interface WhiteboardSnapshot {
   colors: string[]
   colorIdx: number
   strokeWidth: number
+  lineType: LineType
 }
 
 export const SHAPE3D_LABELS: Record<Shape3D, string> = {
@@ -69,11 +86,22 @@ export const TEMPLATE_LABELS: Record<TemplateKind, string> = {
   table: 'Таблица 4×4',
 }
 
+/** Только актуальные шаблоны для меню (таблица 4×4 убрана) */
+export const TEMPLATE_ORDER: TemplateKind[] = ['coords', 'numberline']
+
 export const TEMPLATE_SIZES: Record<TemplateKind, { w: number; h: number }> = {
   coords: { w: 440, h: 440 },
   numberline: { w: 560, h: 96 },
   table: { w: 420, h: 300 },
 }
+
+export const LINE_TYPE_LABELS: Record<LineType, string> = {
+  solid: 'Сплошная',
+  dashed: 'Пунктир',
+  wavy: 'Волнистая',
+}
+
+export const LINE_TYPE_ORDER: LineType[] = ['solid', 'dashed', 'wavy']
 
 export function uid(): string {
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 9)}`
@@ -88,8 +116,12 @@ export function normRect(x: number, y: number, w: number, h: number) {
   }
 }
 
+export function clampZoom(z: number): number {
+  return Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, z))
+}
+
 export function emptyPage(): PageState {
-  return { elements: [], past: [], future: [] }
+  return { elements: [], past: [], future: [], camera: { ...DEFAULT_CAMERA } }
 }
 
 function isFiniteBox(o: unknown): o is { x: number; y: number; w: number; h: number } {
@@ -101,13 +133,29 @@ function isFiniteBox(o: unknown): o is { x: number; y: number; w: number; h: num
   )
 }
 
+/** Извлекает проверенный bbox из сырых данных */
+function boxOf(el: Record<string, unknown>): { x: number; y: number; w: number; h: number } | null {
+  if (!isFiniteBox(el)) return null
+  return { x: el.x, y: el.y, w: el.w, h: el.h }
+}
+
+function sanitizeLineType(v: unknown): LineType {
+  return v === 'dashed' || v === 'wavy' || v === 'solid' ? v : 'solid'
+}
+
+function sanitizeCamera(v: unknown): Camera {
+  const c = (v ?? {}) as Partial<Camera>
+  const num = (x: unknown) => (typeof x === 'number' && Number.isFinite(x) ? x : 0)
+  return { x: num(c.x), y: num(c.y), zoom: clampZoom(num(c.zoom) || 1) }
+}
+
 /** Строгая проверка элемента при загрузке из localStorage */
 function sanitizeElement(raw: unknown): Element | null {
   if (typeof raw !== 'object' || raw === null) return null
   const el = raw as Record<string, unknown>
   if (typeof el.id !== 'string' || typeof el.color !== 'string') return null
   const sw = typeof el.strokeWidth === 'number' && el.strokeWidth > 0 ? el.strokeWidth : 2
-  const base = { id: el.id, color: el.color, strokeWidth: sw }
+  const base = { id: el.id, color: el.color, strokeWidth: sw, lineType: sanitizeLineType(el.lineType) }
   switch (el.kind) {
     case 'pen': {
       const pts = Array.isArray(el.points)
@@ -136,37 +184,28 @@ function sanitizeElement(raw: unknown): Element | null {
     }
     case 'rect':
     case 'ellipse':
-    case 'triangle':
-      if (!isFiniteBox(el)) return null
-      return { ...base, kind: el.kind, x: el.x, y: el.y, w: el.w, h: el.h }
-    case 'shape3d':
-      if (!isFiniteBox(el) || typeof el.shape !== 'string' || !(el.shape in SHAPE3D_LABELS)) return null
-      return {
-        ...base,
-        kind: 'shape3d',
-        shape: el.shape as Shape3D,
-        x: el.x,
-        y: el.y,
-        w: el.w,
-        h: el.h,
-      }
-    case 'template':
-      if (!isFiniteBox(el) || typeof el.template !== 'string' || !(el.template in TEMPLATE_LABELS)) return null
-      return {
-        ...base,
-        kind: 'template',
-        template: el.template as TemplateKind,
-        x: el.x,
-        y: el.y,
-        w: el.w,
-        h: el.h,
-      }
+    case 'triangle': {
+      const b = boxOf(el)
+      if (!b) return null
+      return { ...base, kind: el.kind, ...b }
+    }
+    case 'shape3d': {
+      const b = boxOf(el)
+      if (!b || typeof el.shape !== 'string' || !(el.shape in SHAPE3D_LABELS)) return null
+      return { ...base, kind: 'shape3d', shape: el.shape as Shape3D, ...b }
+    }
+    case 'template': {
+      const b = boxOf(el)
+      if (!b || typeof el.template !== 'string' || !(el.template in TEMPLATE_LABELS)) return null
+      return { ...base, kind: 'template', template: el.template as TemplateKind, ...b }
+    }
     default:
       return null
   }
 }
 
-/** Восстановление состояния из localStorage с защитой от битых данных */
+/** Восстановление состояния из localStorage с защитой от битых данных.
+ *  Старый фон «grid» превращается в «white» (сетка теперь всегда на белом). */
 export function sanitizeSnapshot(raw: unknown): WhiteboardSnapshot | null {
   if (typeof raw !== 'object' || raw === null) return null
   const d = raw as Partial<WhiteboardSnapshot>
@@ -180,10 +219,11 @@ export function sanitizeSnapshot(raw: unknown): WhiteboardSnapshot | null {
         : [],
       past: [],
       future: [],
+      camera: sanitizeCamera(page.camera),
     }
   })
 
-  const bg: BgMode = d.bg === 'white' || d.bg === 'black' ? d.bg : 'grid'
+  const bg: BgMode = d.bg === 'black' ? 'black' : 'white'
   const colors = Array.isArray(d.colors)
     ? (d.colors as unknown[]).filter((c): c is string => typeof c === 'string').slice(0, 3)
     : []
@@ -192,7 +232,8 @@ export function sanitizeSnapshot(raw: unknown): WhiteboardSnapshot | null {
   const colorIdx = typeof d.colorIdx === 'number' ? Math.min(Math.max(d.colorIdx, 0), 2) : 0
   const strokeWidth =
     typeof d.strokeWidth === 'number' && d.strokeWidth >= 1 && d.strokeWidth <= 16 ? d.strokeWidth : 3
+  const lineType = sanitizeLineType(d.lineType)
   const pageIndex = typeof d.pageIndex === 'number' ? Math.min(Math.max(d.pageIndex, 0), pages.length - 1) : 0
 
-  return { pages, pageIndex, bg, colors, colorIdx, strokeWidth }
+  return { pages, pageIndex, bg, colors, colorIdx, strokeWidth, lineType }
 }

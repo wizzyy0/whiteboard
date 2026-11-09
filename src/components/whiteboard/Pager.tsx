@@ -1,7 +1,9 @@
 'use client'
 
-import { ChevronLeft, ChevronRight, FileX, Plus } from 'lucide-react'
+import { ChevronLeft, ChevronRight, FileX, Minus, Plus } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { Separator } from '@/components/ui/separator'
+import { MAX_ZOOM, MIN_ZOOM } from '@/lib/whiteboard/types'
 
 interface PagerProps {
   count: number
@@ -10,16 +12,56 @@ interface PagerProps {
   onNext: () => void
   onAdd: () => void
   onDelete: () => void
+  zoom: number // 0.1..9
+  onZoomIn: () => void
+  onZoomOut: () => void
+  onZoomReset: () => void
 }
 
-export function Pager({ count, index, onPrev, onNext, onAdd, onDelete }: PagerProps) {
+export function Pager({ count, index, onPrev, onNext, onAdd, onDelete, zoom, onZoomIn, onZoomOut, onZoomReset }: PagerProps) {
   const canDelete = count > 1
+  const percent = Math.round(zoom * 100)
   return (
     <div
       role="toolbar"
-      aria-label="Холсты"
+      aria-label="Холсты и масштаб"
       className="pointer-events-auto absolute bottom-3 right-3 z-20 flex items-center gap-0.5 rounded-full border bg-background/95 p-1.5 shadow-md backdrop-blur"
     >
+      {/* Масштаб: слева от «+» (добавление холста), 10%..900% */}
+      <Button
+        variant="ghost"
+        size="icon"
+        aria-label="Уменьшить (минимум 10%)"
+        title="Уменьшить"
+        onClick={onZoomOut}
+        disabled={zoom <= MIN_ZOOM + 1e-9}
+        className="h-9 w-9 rounded-full shrink-0"
+      >
+        <Minus className="h-4 w-4" />
+      </Button>
+      <button
+        type="button"
+        aria-label={`Масштаб ${percent}%, клик вернёт 100%`}
+        title="Масштаб (клик — 100%)"
+        onClick={onZoomReset}
+        className="min-w-12 shrink-0 select-none rounded-full py-1 text-center font-mono text-sm tabular-nums text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+      >
+        {percent}%
+      </button>
+      <Button
+        variant="ghost"
+        size="icon"
+        aria-label="Увеличить (максимум 900%)"
+        title="Увеличить"
+        onClick={onZoomIn}
+        disabled={zoom >= MAX_ZOOM - 1e-9}
+        className="h-9 w-9 rounded-full shrink-0"
+      >
+        <Plus className="h-4 w-4" />
+      </Button>
+
+      <Separator orientation="vertical" className="mx-1 h-6 shrink-0" />
+
       <Button
         variant="ghost"
         size="icon"
