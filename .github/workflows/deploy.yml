@@ -35,6 +35,11 @@ jobs:
         env:
           NEXT_PUBLIC_BASE_PATH: /whiteboard
 
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+        with:
+          enabled: true
+
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:
