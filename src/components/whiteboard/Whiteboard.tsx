@@ -733,9 +733,9 @@ export default function Whiteboard() {
         </div>
       </main>
 
-      {/* Служебные кнопки и цвета — компактная колонка слева */}
+      {/* Служебные кнопки и цвета — компактная колонка слева внизу */}
       <div
-        className="pointer-events-auto absolute left-3 top-3 z-20 flex max-h-[calc(100dvh-24px)] flex-col items-center gap-2 overflow-y-auto no-scrollbar"
+        className="pointer-events-auto absolute bottom-16 left-3 z-20 flex max-h-[calc(100dvh-88px)] flex-col items-center gap-2 overflow-y-auto no-scrollbar"
       >
         <SideActions
           bg={bg}
