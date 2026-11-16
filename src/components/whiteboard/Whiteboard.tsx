@@ -8,7 +8,6 @@ import {
   clampZoom,
   emptyPage,
   normRect,
-  sanitizeSnapshot,
   uid,
   TEMPLATE_SIZES,
   type BgMode,
@@ -20,7 +19,6 @@ import {
   type Shape3D,
   type TemplateKind,
   type ToolKind,
-  type WhiteboardSnapshot,
 } from '@/lib/whiteboard/types'
 import { Toolbar } from './Toolbar'
 import { ColorPanel } from './ColorPanel'
@@ -62,7 +60,6 @@ export default function Whiteboard() {
   const [lasso, setLasso] = useState<Point[] | null>(null)
   const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [size, setSize] = useState({ w: 0, h: 0 })
-  const [loaded, setLoaded] = useState(false)
   const [panning, setPanning] = useState(false)
 
   const containerRef = useRef<HTMLDivElement>(null)
@@ -97,50 +94,18 @@ export default function Whiteboard() {
     return unionBbox(sel)
   }, [page.elements, selectedSet])
 
-  /* ---------- загрузка / сохранение ---------- */
+  /* ---------- очистка при перезаходе ---------- */
 
+  // Каждое открытие сайта начинается с чистой доски: прошлое состояние не
+  // восстанавливается и сразу удаляется из хранилища браузера
   useEffect(() => {
-    let cancelled = false
-    const t = setTimeout(() => {
-      if (cancelled) return
-      try {
-        // v2, а для старых досок — миграция с v1
-        const raw = localStorage.getItem(STORAGE_KEY) ?? localStorage.getItem(LEGACY_KEY)
-        if (raw) {
-          const snap = sanitizeSnapshot(JSON.parse(raw))
-          if (snap) {
-            setPages(snap.pages)
-            setPageIndex(snap.pageIndex)
-            setBg(snap.bg)
-            setColors(snap.colors)
-            setColorIdx(snap.colorIdx)
-            setStrokeWidth(snap.strokeWidth)
-            setLineType(snap.lineType)
-          }
-        }
-      } catch {
-        /* повреждённые данные — начинаем с чистой доски */
-      }
-      setLoaded(true)
-    }, 0)
-    return () => {
-      cancelled = true
-      clearTimeout(t)
+    try {
+      localStorage.removeItem(STORAGE_KEY)
+      localStorage.removeItem(LEGACY_KEY)
+    } catch {
+      /* приватный режим — просто начинаем с чистой доски */
     }
   }, [])
-
-  useEffect(() => {
-    if (!loaded) return
-    const t = setTimeout(() => {
-      const snap: WhiteboardSnapshot = { pages, pageIndex: safeIndex, bg, colors, colorIdx, strokeWidth, lineType }
-      try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(snap))
-      } catch {
-        /* переполнение хранилища игнорируем */
-      }
-    }, 300)
-    return () => clearTimeout(t)
-  }, [loaded, pages, safeIndex, bg, colors, colorIdx, strokeWidth, lineType])
 
   /* ---------- размер канваса ---------- */
 
@@ -768,35 +733,40 @@ export default function Whiteboard() {
         </div>
       </main>
 
-      <Toolbar
-        tool={tool}
-        onToolChange={setTool}
-        shape3d={shape3d}
-        onShape3dChange={setShape3d}
-        template={template}
-        onTemplateChange={setTemplate}
-        bg={bg}
-        onBgToggle={toggleBg}
-        canUndo={page.past.length > 0}
-        canRedo={page.future.length > 0}
-        onUndo={undo}
-        onRedo={redo}
-        onClear={clearPage}
-        onExport={exportPng}
-      />
+      {/* Все инструменты — единая колонка слева; на низких экранах прокручивается */}
+      <div
+        className="pointer-events-auto absolute left-3 top-1/2 z-20 flex max-h-[calc(100dvh-24px)] -translate-y-1/2 flex-col items-center gap-2 overflow-y-auto no-scrollbar"
+      >
+        <Toolbar
+          tool={tool}
+          onToolChange={setTool}
+          shape3d={shape3d}
+          onShape3dChange={setShape3d}
+          template={template}
+          onTemplateChange={setTemplate}
+          bg={bg}
+          onBgToggle={toggleBg}
+          canUndo={page.past.length > 0}
+          canRedo={page.future.length > 0}
+          onUndo={undo}
+          onRedo={redo}
+          onClear={clearPage}
+          onExport={exportPng}
+        />
 
-      <ColorPanel
-        colors={colors}
-        colorIdx={colorIdx}
-        onSelectColor={setColorIdx}
-        onEditColor={(idx, hex) =>
-          setColors((prev) => prev.map((c, i) => (i === idx ? hex : c)))
-        }
-        strokeWidth={strokeWidth}
-        onStrokeWidthChange={setStrokeWidth}
-        lineType={lineType}
-        onLineTypeChange={setLineType}
-      />
+        <ColorPanel
+          colors={colors}
+          colorIdx={colorIdx}
+          onSelectColor={setColorIdx}
+          onEditColor={(idx, hex) =>
+            setColors((prev) => prev.map((c, i) => (i === idx ? hex : c)))
+          }
+          strokeWidth={strokeWidth}
+          onStrokeWidthChange={setStrokeWidth}
+          lineType={lineType}
+          onLineTypeChange={setLineType}
+        />
+      </div>
 
       <Pager
         count={pages.length}

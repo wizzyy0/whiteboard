@@ -28,7 +28,7 @@ interface ToolbarProps {
 }
 
 function Divider() {
-  return <Separator orientation="vertical" className="mx-1 h-6 shrink-0" />
+  return <Separator orientation="horizontal" className="my-0.5 h-px w-6 shrink-0" />
 }
 
 interface ToolBtnProps {
@@ -49,7 +49,7 @@ function ToolBtn({ active, disabled, label, onClick, children, className }: Tool
       title={label}
       disabled={disabled}
       onClick={onClick}
-      className={cn('h-9 w-9 rounded-full shrink-0', active && 'bg-accent text-accent-foreground', className)}
+      className={cn('h-8 w-8 rounded-full shrink-0', active && 'bg-accent text-accent-foreground', className)}
     >
       {children}
     </Button>
@@ -76,11 +76,11 @@ export function Toolbar({
   const [templateOpen, setTemplateOpen] = useState(false)
 
   return (
-    <div className="pointer-events-auto absolute left-1/2 top-3 z-20 w-max max-w-[calc(100vw-16px)] -translate-x-1/2 overflow-x-auto no-scrollbar">
+    <div className="pointer-events-auto relative z-20 w-max">
       <div
         role="toolbar"
         aria-label="Инструменты доски"
-        className="flex w-max items-center gap-0.5 rounded-full border bg-background/95 p-1.5 shadow-md backdrop-blur"
+        className="flex w-max flex-col items-center gap-0.5 rounded-full border bg-background/95 p-1.5 shadow-md backdrop-blur"
       >
         <ToolBtn active={tool === 'pen'} label="Кисть (P)" onClick={() => onToolChange('pen')}>
           <Pencil className="h-4 w-4" />
@@ -120,12 +120,12 @@ export function Toolbar({
               size="icon"
               aria-label="3D-фигуры с невидимыми линиями"
               title="3D-фигуры (невидимые линии — пунктиром)"
-              className={cn('h-9 w-9 rounded-full shrink-0 gap-0.5', tool === 'shape3d' && 'bg-accent text-accent-foreground')}
+              className={cn('h-8 w-8 rounded-full shrink-0 gap-0.5', tool === 'shape3d' && 'bg-accent text-accent-foreground')}
             >
               <Box className="h-4 w-4" />
             </Button>
           </PopoverTrigger>
-          <PopoverContent className="w-72 p-2" align="center">
+          <PopoverContent className="w-72 p-2" side="right" align="center">
             <div className="px-2 pb-1.5 pt-0.5 text-xs font-medium text-muted-foreground">
               3D-тела — невидимые линии пунктиром
             </div>
@@ -161,12 +161,12 @@ export function Toolbar({
               size="icon"
               aria-label="Шаблоны для уроков"
               title="Шаблоны: координатная плоскость, числовая ось"
-              className={cn('h-9 w-9 rounded-full shrink-0', tool === 'template' && 'bg-accent text-accent-foreground')}
+              className={cn('h-8 w-8 rounded-full shrink-0', tool === 'template' && 'bg-accent text-accent-foreground')}
             >
               <LayoutGrid className="h-4 w-4" />
             </Button>
           </PopoverTrigger>
-          <PopoverContent className="w-72 p-1.5" align="center">
+          <PopoverContent className="w-72 p-1.5" side="right" align="center">
             <div className="px-2 py-1.5 text-xs font-medium text-muted-foreground">Шаблоны — кликните на холсте, чтобы вставить</div>
             {TEMPLATE_ORDER.map((t) => (
               <button

@@ -24,9 +24,9 @@ interface ColorPanelProps {
   onLineTypeChange: (lt: LineType) => void
 }
 
-/** Вертикальная радужная полоса оттенка (H) */
+/** Горизонтальная радужная полоса оттенка (H): слева красный (0°) → справа красный (360°) */
 const HUE_GRADIENT =
-  'linear-gradient(to bottom, #f00 0%, #ff0 17%, #0f0 33%, #0ff 50%, #00f 67%, #f0f 83%, #f00 100%)'
+  'linear-gradient(to right, #f00 0%, #ff0 17%, #0f0 33%, #0ff 50%, #00f 67%, #f0f 83%, #f00 100%)'
 
 export function ColorPanel({ colors, colorIdx, onSelectColor, onEditColor, strokeWidth, onStrokeWidthChange, lineType, onLineTypeChange }: ColorPanelProps) {
   const [paletteOpen, setPaletteOpen] = useState(false)
@@ -37,6 +37,13 @@ export function ColorPanel({ colors, colorIdx, onSelectColor, onEditColor, strok
   const svRef = useRef<HTMLDivElement>(null)
   const hueRef = useRef<HTMLDivElement>(null)
   const dragRef = useRef<'sv' | 'hue' | null>(null)
+  // Актуальный HSV вне рендера: события указателя не зависят от устаревшего замыкания
+  const hsvRef = useRef<Hsv>({ h: 0, s: 0, v: 0 })
+
+  const commitHsv = (next: Hsv) => {
+    hsvRef.current = next
+    setHsv(next)
+  }
 
   const activeColor = colors[colorIdx] ?? '#000000'
 
@@ -47,13 +54,13 @@ export function ColorPanel({ colors, colorIdx, onSelectColor, onEditColor, strok
       const hex = colors[colorIdx] ?? '#000000'
       const c = hexToRgb(hex)
       setRgb(c)
-      setHsv(hexToHsv(hex))
+      commitHsv(hexToHsv(hex))
       setHexInput(rgbToHex(c))
     }
   }
 
   const applyHsv = (next: Hsv) => {
-    setHsv(next)
+    commitHsv(next)
     const rgbNext = hsvToRgb(next)
     setRgb(rgbNext)
     const hex = rgbToHex(rgbNext)
@@ -78,13 +85,15 @@ export function ColorPanel({ colors, colorIdx, onSelectColor, onEditColor, strok
     const el = kind === 'sv' ? svRef.current : hueRef.current
     if (!el) return
     const r = el.getBoundingClientRect()
+    const base = hsvRef.current
     if (kind === 'sv') {
       const s = Math.min(1, Math.max(0, (e.clientX - r.left) / r.width))
       const v = Math.min(1, Math.max(0, 1 - (e.clientY - r.top) / r.height))
-      applyHsv({ ...hsv, s, v })
+      applyHsv({ ...base, s, v })
     } else {
-      const h = Math.min(359.9, Math.max(0, ((e.clientY - r.top) / r.height) * 360))
-      applyHsv({ ...hsv, h })
+      // оттенок — по горизонтали полосы (X), а не по вертикали
+      const h = Math.min(359.9, Math.max(0, ((e.clientX - r.left) / r.width) * 360))
+      applyHsv({ ...base, h })
     }
   }
 
@@ -102,9 +111,8 @@ export function ColorPanel({ colors, colorIdx, onSelectColor, onEditColor, strok
   }
 
   return (
-    <div className="pointer-events-auto absolute z-20 flex gap-1 rounded-full border bg-background/95 p-1.5 shadow-md backdrop-blur
-      left-1/2 top-[64px] -translate-x-1/2 flex-row items-center
-      sm:left-3 sm:top-1/2 sm:bottom-auto sm:translate-x-0 sm:-translate-y-1/2 sm:flex-col"
+    <div
+      className="pointer-events-auto relative z-20 flex flex-col items-center gap-1 rounded-full border bg-background/95 p-1.5 shadow-md backdrop-blur"
       role="toolbar"
       aria-label="Цвета и толщина линии"
     >
@@ -222,7 +230,7 @@ export function ColorPanel({ colors, colorIdx, onSelectColor, onEditColor, strok
         </PopoverContent>
       </Popover>
 
-      <Separator orientation="vertical" className="h-6 shrink-0 sm:h-6 sm:w-px" />
+      <Separator orientation="horizontal" className="h-px w-6 shrink-0" />
 
       {/* Толщина + тип линии */}
       <Popover open={widthOpen} onOpenChange={setWidthOpen}>

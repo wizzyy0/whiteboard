@@ -18,9 +18,6 @@ export const metadata: Metadata = {
   description:
     "Интерактивная доска: рисование, 2D-фигуры, 3D-тела с невидимыми линиями, RGB-палитра, клетка как в тетради, несколько холстов и экспорт в PNG.",
   keywords: ["whiteboard", "доска", "рисование", "3D фигуры", "геометрия", "обучение"],
-  icons: {
-    icon: "https://z-cdn.chatglm.cn/z-ai/static/logo.svg",
-  },
 };
 
 export const viewport: Viewport = {
