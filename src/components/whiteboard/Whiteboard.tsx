@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { Type } from 'lucide-react'
 import { applyCamera, drawBackground, drawElement, drawRotateHandle, strokeSelectionBox } from '@/lib/whiteboard/render'
 import {
   flipElementsAbout,
@@ -12,6 +13,7 @@ import {
   unionBbox,
 } from '@/lib/whiteboard/geometry'
 import { luminance } from '@/lib/whiteboard/color'
+import { cn } from '@/lib/utils'
 import {
   clampZoom,
   emptyPage,
@@ -129,6 +131,7 @@ export default function Whiteboard() {
   const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [size, setSize] = useState({ w: 0, h: 0 })
   const [panning, setPanning] = useState(false)
+  const [showLabels, setShowLabels] = useState(true)
 
   const containerRef = useRef<HTMLDivElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
@@ -213,8 +216,8 @@ export default function Whiteboard() {
     const ctx = canvas.getContext('2d')
     if (!ctx) return
     drawBackground(ctx, bg, size.w, size.h, cam, dpr) // далее — мировые координаты
-    for (const el of page.elements) drawElement(ctx, el, cam.zoom)
-    if (draft) drawElement(ctx, draft, cam.zoom)
+    for (const el of page.elements) drawElement(ctx, el, cam.zoom, showLabels)
+    if (draft) drawElement(ctx, draft, cam.zoom, showLabels)
 
     if (selectionBox) {
       const pad = 6 / cam.zoom
@@ -252,7 +255,7 @@ export default function Whiteboard() {
       ctx.stroke()
       ctx.restore()
     }
-  }, [size, bg, page, cam, draft, lasso, selectionBox, tool])
+  }, [size, bg, page, cam, draft, lasso, selectionBox, tool, showLabels])
 
   /* ---------- страницы ---------- */
 
@@ -862,12 +865,12 @@ export default function Whiteboard() {
     if (!ctx) return
     drawBackground(ctx, bg, size.w, size.h, cam, scale)
     applyCamera(ctx, cam, scale)
-    for (const el of page.elements) drawElement(ctx, el, cam.zoom)
+    for (const el of page.elements) drawElement(ctx, el, cam.zoom, showLabels)
     const a = document.createElement('a')
     a.download = `whiteboard-${safeIndex + 1}.png`
     a.href = c.toDataURL('image/png')
     a.click()
-  }, [size, bg, page.elements, cam, safeIndex])
+  }, [size, bg, page.elements, cam, safeIndex, showLabels])
 
   return (
     <div className="fixed inset-0 select-none overflow-hidden bg-background">
@@ -945,6 +948,23 @@ export default function Whiteboard() {
           onLineTypeChange={setLineType}
         />
       </div>
+
+      {/* Переключатель подписей вершин — в пустом углу слева внизу */}
+      <button
+        type="button"
+        aria-pressed={showLabels}
+        aria-label={showLabels ? 'Скрыть подписи вершин (A₁B₁C₁D₁)' : 'Показать подписи вершин (A₁B₁C₁D₁)'}
+        title={showLabels ? 'Скрыть подписи вершин (A₁B₁C₁D₁)' : 'Показать подписи вершин (A₁B₁C₁D₁)'}
+        onClick={() => setShowLabels((v) => !v)}
+        className={cn(
+          'pointer-events-auto absolute bottom-3 left-3 z-20 flex h-9 w-9 items-center justify-center rounded-full border shadow-md backdrop-blur',
+          showLabels
+            ? 'border-accent bg-accent text-accent-foreground'
+            : 'border-slate-200 bg-background/95 text-muted-foreground',
+        )}
+      >
+        <Type className="h-4 w-4" aria-hidden="true" />
+      </button>
 
       {/* Основные инструменты рисования — внизу по центру */}
       <div className="pointer-events-auto absolute bottom-3 left-1/2 z-20 max-w-[calc(100vw-24px)] -translate-x-1/2 overflow-x-auto no-scrollbar">

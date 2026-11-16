@@ -29,21 +29,24 @@ export function bboxOf(el: Element): { x: number; y: number; w: number; h: numbe
     case 'arrow':
       return normRect(Math.min(el.x1, el.x2), Math.min(el.y1, el.y2), Math.abs(el.x2 - el.x1), Math.abs(el.y2 - el.y1))
     case 'shape3d': {
+      // фигуру могли нарисовать «справа налево» или «снизу вверх» (w/h < 0) —
+      // рендер нормализует размеры, значит и рамка должна считаться по нормализованному прямоугольнику
+      const b = normRect(el.x, el.y, el.w, el.h)
       // глубина «вверх-вправо» на d — фигура выходит за исходный bbox
-      const d = Math.min(el.w, el.h) * 0.45
+      const d = Math.min(b.w, b.h) * 0.45
       switch (el.shape) {
         case 'cube': {
-          const s = Math.min(el.w, el.h)
-          return { x: el.x, y: el.y - d, w: s + d, h: s + d }
+          const s = Math.min(b.w, b.h)
+          return { x: b.x, y: b.y - d, w: s + d, h: s + d }
         }
         case 'cuboid':
-          return { x: el.x, y: el.y - d, w: el.w + d, h: el.h + d }
+          return { x: b.x, y: b.y - d, w: b.w + d, h: b.h + d }
         case 'pyramid':
-          return { x: el.x, y: el.y, w: el.w + d, h: el.h }
+          return { x: b.x, y: b.y, w: b.w + d, h: b.h }
         case 'prism':
-          return { x: el.x, y: el.y - d, w: el.w + d, h: el.h + d }
+          return { x: b.x, y: b.y - d, w: b.w + d, h: b.h + d }
         default:
-          return normRect(el.x, el.y, el.w, el.h) // цилиндр, конус, шар — в пределах bbox
+          return b // цилиндр, конус, шар — в пределах bbox
       }
     }
     default:

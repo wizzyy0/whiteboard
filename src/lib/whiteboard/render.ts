@@ -231,6 +231,7 @@ export function drawShape3D(
   h0: number,
   zoom = 1,
   tf: ElTf | null = null,
+  labels = true,
 ) {
   // нормализация к положительным размерам
   let x = x0
@@ -275,14 +276,17 @@ export function drawShape3D(
       solid(ctx)
       const fs = labelFontSize(Math.min(s, sh))
       const m = fs * 0.55
-      vertexLabel(ctx, 'A', null, x - m * 0.8, y2 + m * 0.8, fs, 'right', tf)
-      vertexLabel(ctx, 'B', null, x + dx - m, y2 + dy - m * 0.3, fs, 'right', tf)
-      vertexLabel(ctx, 'C', null, x2 + dx + m, y2 + dy, fs, 'left', tf)
-      vertexLabel(ctx, 'D', null, x2 + m * 0.8, y2 + m * 0.8, fs, 'left', tf)
-      vertexLabel(ctx, 'A', '1', x - m, y + m * 0.5, fs, 'right', tf)
-      vertexLabel(ctx, 'B', '1', x + dx, y + dy - m * 1.2, fs, 'center', tf)
-      vertexLabel(ctx, 'C', '1', x2 + dx + m, y + dy - m * 0.4, fs, 'left', tf)
-      vertexLabel(ctx, 'D', '1', x2 - m * 0.6, y - m * 0.9, fs, 'center', tf)
+      if (labels) {
+        vertexLabel(ctx, 'A', null, x - m * 0.8, y2 + m * 0.8, fs, 'right', tf)
+        vertexLabel(ctx, 'B', null, x + dx - m, y2 + dy - m * 0.3, fs, 'right', tf)
+        vertexLabel(ctx, 'C', null, x2 + dx + m, y2 + dy, fs, 'left', tf)
+        vertexLabel(ctx, 'D', null, x2 + m * 0.8, y2 + m * 0.8, fs, 'left', tf)
+        vertexLabel(ctx, 'A', '1', x - m, y + m * 0.5, fs, 'right', tf)
+        vertexLabel(ctx, 'B', '1', x + dx, y + dy - m * 1.2, fs, 'center', tf)
+        vertexLabel(ctx, 'C', '1', x2 + dx + m, y + dy - m * 0.4, fs, 'left', tf)
+        // D₁ — чуть выше и левее, чтобы не цеплять переднее верхнее ребро и ребро глубины
+        vertexLabel(ctx, 'D', '1', x2 - m * 1.8, y - m * 2.1, fs, 'center', tf)
+      }
       break
     }
     case 'pyramid': {
@@ -307,11 +311,13 @@ export function drawShape3D(
       solid(ctx)
       const fs = labelFontSize(Math.min(w, h))
       const m = fs * 0.55
-      vertexLabel(ctx, 'A', null, bl.x - m * 0.8, bl.y + m * 0.8, fs, 'right', tf)
-      vertexLabel(ctx, 'B', null, br.x + m * 0.8, br.y + m * 0.8, fs, 'left', tf)
-      vertexLabel(ctx, 'C', null, brp.x + m, brp.y, fs, 'left', tf)
-      vertexLabel(ctx, 'D', null, blp.x - m, blp.y - m * 0.4, fs, 'right', tf)
-      vertexLabel(ctx, 'S', null, apex.x, apex.y - m * 1.4, fs, 'center', tf)
+      if (labels) {
+        vertexLabel(ctx, 'A', null, bl.x - m * 0.8, bl.y + m * 0.8, fs, 'right', tf)
+        vertexLabel(ctx, 'B', null, br.x + m * 0.8, br.y + m * 0.8, fs, 'left', tf)
+        vertexLabel(ctx, 'C', null, brp.x + m, brp.y, fs, 'left', tf)
+        vertexLabel(ctx, 'D', null, blp.x - m, blp.y - m * 0.4, fs, 'right', tf)
+        vertexLabel(ctx, 'S', null, apex.x, apex.y - m * 1.4, fs, 'center', tf)
+      }
       break
     }
     case 'prism': {
@@ -339,12 +345,14 @@ export function drawShape3D(
       solid(ctx)
       const fs = labelFontSize(Math.min(w, h))
       const m = fs * 0.55
-      vertexLabel(ctx, 'A', null, bl.x - m * 0.8, bl.y + m * 0.8, fs, 'right', tf)
-      vertexLabel(ctx, 'B', null, br.x + m * 0.8, br.y + m * 0.8, fs, 'left', tf)
-      vertexLabel(ctx, 'C', null, top.x, top.y - m * 1.3, fs, 'center', tf)
-      vertexLabel(ctx, 'A', '1', blp.x - m, blp.y - m * 0.4, fs, 'right', tf)
-      vertexLabel(ctx, 'B', '1', brp.x + m, brp.y, fs, 'left', tf)
-      vertexLabel(ctx, 'C', '1', topp.x + m, topp.y - m * 0.4, fs, 'left', tf)
+      if (labels) {
+        vertexLabel(ctx, 'A', null, bl.x - m * 0.8, bl.y + m * 0.8, fs, 'right', tf)
+        vertexLabel(ctx, 'B', null, br.x + m * 0.8, br.y + m * 0.8, fs, 'left', tf)
+        vertexLabel(ctx, 'C', null, top.x, top.y - m * 1.3, fs, 'center', tf)
+        vertexLabel(ctx, 'A', '1', blp.x - m, blp.y - m * 0.4, fs, 'right', tf)
+        vertexLabel(ctx, 'B', '1', brp.x + m, brp.y, fs, 'left', tf)
+        vertexLabel(ctx, 'C', '1', topp.x + m, topp.y - m * 0.4, fs, 'left', tf)
+      }
       break
     }
     case 'cylinder': {
@@ -503,8 +511,9 @@ export function drawTemplate(
 
 /* ---------- диспетчер отрисовки элементов ---------- */
 
-/** zoom нужен, чтобы толщина линии оставалась постоянной НА ЭКРАНЕ при любом зуме */
-export function drawElement(ctx: CanvasRenderingContext2D, el: Element, zoom = 1) {
+/** zoom нужен, чтобы толщина линии оставалась постоянной НА ЭКРАНЕ при любом зуме.
+ *  labels — рисовать ли подписи вершин у 3D-тел (переключатель на панели слева) */
+export function drawElement(ctx: CanvasRenderingContext2D, el: Element, zoom = 1, labels = true) {
   ctx.save()
   ctx.strokeStyle = el.color
   ctx.fillStyle = el.color
@@ -632,7 +641,7 @@ export function drawElement(ctx: CanvasRenderingContext2D, el: Element, zoom = 1
       break
     }
     case 'shape3d':
-      drawShape3D(ctx, el.shape, el.x, el.y, el.w, el.h, zoom, tf)
+      drawShape3D(ctx, el.shape, el.x, el.y, el.w, el.h, zoom, tf, labels)
       break
     case 'template':
       drawTemplate(
