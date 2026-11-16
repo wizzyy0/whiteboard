@@ -183,6 +183,36 @@ function hidden(ctx: CanvasRenderingContext2D, zoom: number) {
   ctx.setLineDash([7 / zoom, 5 / zoom])
 }
 
+/** Размер подписи вершин пропорционален телу, с разумными границами */
+function labelFontSize(size: number): number {
+  return Math.min(Math.max(size * 0.09, 9), 20)
+}
+
+/** Подпись вершины «как в учебнике»: курсивная буква, при sub — нижний индекс (A₁) */
+function vertexLabel(
+  ctx: CanvasRenderingContext2D,
+  letter: string,
+  sub: string | null,
+  px: number,
+  py: number,
+  fs: number,
+  align: CanvasTextAlign,
+) {
+  ctx.save()
+  ctx.setLineDash([])
+  ctx.textAlign = align
+  ctx.textBaseline = 'middle'
+  ctx.font = `italic ${fs}px Georgia, 'Times New Roman', serif`
+  ctx.fillText(letter, px, py)
+  if (sub) {
+    const w = ctx.measureText(letter).width
+    const anchor = align === 'center' ? px + w / 2 : align === 'right' ? px : px + w
+    ctx.font = `italic ${fs * 0.62}px Georgia, 'Times New Roman', serif`
+    ctx.fillText(sub, anchor + fs * 0.06, py + fs * 0.34)
+  }
+  ctx.restore()
+}
+
 export function drawShape3D(
   ctx: CanvasRenderingContext2D,
   shape: Shape3D,
@@ -231,6 +261,18 @@ export function drawShape3D(
       line(ctx, x, y2, x + dx, y2 + dy)
       line(ctx, x + dx, y2 + dy, x2 + dx, y2 + dy)
       line(ctx, x + dx, y2 + dy, x + dx, y + dy)
+      // подписи вершин «как в учебнике»: ABCD внизу, A₁B₁C₁D₁ вверху
+      solid(ctx)
+      const fs = labelFontSize(Math.min(s, sh))
+      const m = fs * 0.55
+      vertexLabel(ctx, 'A', null, x - m * 0.8, y2 + m * 0.8, fs, 'right')
+      vertexLabel(ctx, 'B', null, x + dx - m, y2 + dy - m * 0.3, fs, 'right')
+      vertexLabel(ctx, 'C', null, x2 + dx + m, y2 + dy, fs, 'left')
+      vertexLabel(ctx, 'D', null, x2 + m * 0.8, y2 + m * 0.8, fs, 'left')
+      vertexLabel(ctx, 'A', '1', x - m, y + m * 0.5, fs, 'right')
+      vertexLabel(ctx, 'B', '1', x + dx, y + dy - m * 1.2, fs, 'center')
+      vertexLabel(ctx, 'C', '1', x2 + dx + m, y + dy - m * 0.4, fs, 'left')
+      vertexLabel(ctx, 'D', '1', x2 - m * 0.6, y - m * 0.9, fs, 'center')
       break
     }
     case 'pyramid': {
@@ -251,6 +293,15 @@ export function drawShape3D(
       line(ctx, bl.x, bl.y, blp.x, blp.y)
       line(ctx, blp.x, blp.y, brp.x, brp.y)
       line(ctx, blp.x, blp.y, apex.x, apex.y)
+      // подписи вершин: основание ABCD и вершина S
+      solid(ctx)
+      const fs = labelFontSize(Math.min(w, h))
+      const m = fs * 0.55
+      vertexLabel(ctx, 'A', null, bl.x - m * 0.8, bl.y + m * 0.8, fs, 'right')
+      vertexLabel(ctx, 'B', null, br.x + m * 0.8, br.y + m * 0.8, fs, 'left')
+      vertexLabel(ctx, 'C', null, brp.x + m, brp.y, fs, 'left')
+      vertexLabel(ctx, 'D', null, blp.x - m, blp.y - m * 0.4, fs, 'right')
+      vertexLabel(ctx, 'S', null, apex.x, apex.y - m * 1.4, fs, 'center')
       break
     }
     case 'prism': {
@@ -274,6 +325,16 @@ export function drawShape3D(
       line(ctx, bl.x, bl.y, blp.x, blp.y)
       line(ctx, blp.x, blp.y, brp.x, brp.y)
       line(ctx, blp.x, blp.y, topp.x, topp.y)
+      // подписи вершин: основания ABC и A₁B₁C₁
+      solid(ctx)
+      const fs = labelFontSize(Math.min(w, h))
+      const m = fs * 0.55
+      vertexLabel(ctx, 'A', null, bl.x - m * 0.8, bl.y + m * 0.8, fs, 'right')
+      vertexLabel(ctx, 'B', null, br.x + m * 0.8, br.y + m * 0.8, fs, 'left')
+      vertexLabel(ctx, 'C', null, top.x, top.y - m * 1.3, fs, 'center')
+      vertexLabel(ctx, 'A', '1', blp.x - m, blp.y - m * 0.4, fs, 'right')
+      vertexLabel(ctx, 'B', '1', brp.x + m, brp.y, fs, 'left')
+      vertexLabel(ctx, 'C', '1', topp.x + m, topp.y - m * 0.4, fs, 'left')
       break
     }
     case 'cylinder': {
