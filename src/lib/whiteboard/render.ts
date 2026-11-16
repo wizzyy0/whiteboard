@@ -185,7 +185,7 @@ function hidden(ctx: CanvasRenderingContext2D, zoom: number) {
 
 /** Размер подписи вершин пропорционален телу, с разумными границами */
 function labelFontSize(size: number): number {
-  return Math.min(Math.max(size * 0.09, 9), 20)
+  return Math.min(Math.max(size * 0.14, 12), 34)
 }
 
 /** Подпись вершины «как в учебнике»: курсивная буква, при sub — нижний индекс (A₁) */
@@ -207,8 +207,8 @@ function vertexLabel(
   if (sub) {
     const w = ctx.measureText(letter).width
     const anchor = align === 'center' ? px + w / 2 : align === 'right' ? px : px + w
-    ctx.font = `italic ${fs * 0.62}px Georgia, 'Times New Roman', serif`
-    ctx.fillText(sub, anchor + fs * 0.06, py + fs * 0.34)
+    ctx.font = `italic ${fs * 0.72}px Georgia, 'Times New Roman', serif`
+    ctx.fillText(sub, anchor + fs * 0.05, py + fs * 0.36)
   }
   ctx.restore()
 }

@@ -630,11 +630,12 @@ export default function Whiteboard() {
       const t = e.target as HTMLElement | null
       if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA')) return
       const mod = e.ctrlKey || e.metaKey
-      if (mod && e.key.toLowerCase() === 'z') {
+      // e.code — физическая клавиша: работает и на русской раскладке (там «я» вместо «z»)
+      if (mod && (e.code === 'KeyZ' || e.key.toLowerCase() === 'z')) {
         e.preventDefault()
         if (e.shiftKey) redo()
         else undo()
-      } else if (mod && e.key.toLowerCase() === 'y') {
+      } else if (mod && (e.code === 'KeyY' || e.key.toLowerCase() === 'y')) {
         e.preventDefault()
         redo()
       } else if (mod && e.key === '0') {
@@ -665,17 +666,18 @@ export default function Whiteboard() {
           deleteSelection()
         }
       } else if (!mod) {
+        // тоже по e.code, чтобы инструменты выбирались с любой раскладки
         const map: Record<string, ToolKind> = {
-          p: 'pen',
-          e: 'eraser',
-          s: 'lasso',
-          l: 'line',
-          a: 'arrow',
-          r: 'rect',
-          o: 'ellipse',
-          t: 'triangle',
+          KeyP: 'pen',
+          KeyE: 'eraser',
+          KeyS: 'lasso',
+          KeyL: 'line',
+          KeyA: 'arrow',
+          KeyR: 'rect',
+          KeyO: 'ellipse',
+          KeyT: 'triangle',
         }
-        const tk = map[e.key.toLowerCase()]
+        const tk = map[e.code]
         if (tk) setTool(tk)
       }
     }
