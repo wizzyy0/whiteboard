@@ -10,13 +10,16 @@ import type { BgMode, Shape3D, TemplateKind, ToolKind } from '@/lib/whiteboard/t
 import { SHAPE3D_LABELS, SHAPE3D_ORDER, TEMPLATE_LABELS, TEMPLATE_ORDER } from '@/lib/whiteboard/types'
 import { Shape3DIcon, TemplateIcon } from './icons'
 
-interface ToolbarProps {
+interface ToolsBarProps {
   tool: ToolKind
   onToolChange: (t: ToolKind) => void
   shape3d: Shape3D
   onShape3dChange: (s: Shape3D) => void
   template: TemplateKind
   onTemplateChange: (t: TemplateKind) => void
+}
+
+interface SideActionsProps {
   bg: BgMode
   onBgToggle: () => void
   canUndo: boolean
@@ -27,7 +30,11 @@ interface ToolbarProps {
   onExport: () => void
 }
 
-function Divider() {
+function VDivider() {
+  return <Separator orientation="vertical" className="mx-1 h-6 shrink-0" />
+}
+
+function HDivider() {
   return <Separator orientation="horizontal" className="my-0.5 h-px w-6 shrink-0" />
 }
 
@@ -37,10 +44,9 @@ interface ToolBtnProps {
   label: string
   onClick: () => void
   children: React.ReactNode
-  className?: string
 }
 
-function ToolBtn({ active, disabled, label, onClick, children, className }: ToolBtnProps) {
+function ToolBtn({ active, disabled, label, onClick, children }: ToolBtnProps) {
   return (
     <Button
       variant="ghost"
@@ -49,29 +55,15 @@ function ToolBtn({ active, disabled, label, onClick, children, className }: Tool
       title={label}
       disabled={disabled}
       onClick={onClick}
-      className={cn('h-8 w-8 rounded-full shrink-0', active && 'bg-accent text-accent-foreground', className)}
+      className={cn('h-8 w-8 rounded-full shrink-0', active && 'bg-accent text-accent-foreground')}
     >
       {children}
     </Button>
   )
 }
 
-export function Toolbar({
-  tool,
-  onToolChange,
-  shape3d,
-  onShape3dChange,
-  template,
-  onTemplateChange,
-  bg,
-  onBgToggle,
-  canUndo,
-  canRedo,
-  onUndo,
-  onRedo,
-  onClear,
-  onExport,
-}: ToolbarProps) {
+/** Основные инструменты рисования — внизу по центру */
+export function ToolsBar({ tool, onToolChange, shape3d, onShape3dChange, template, onTemplateChange }: ToolsBarProps) {
   const [shapeOpen, setShapeOpen] = useState(false)
   const [templateOpen, setTemplateOpen] = useState(false)
 
@@ -79,8 +71,8 @@ export function Toolbar({
     <div className="pointer-events-auto relative z-20 w-max">
       <div
         role="toolbar"
-        aria-label="Инструменты доски"
-        className="flex w-max flex-col items-center gap-0.5 rounded-full border bg-background/95 p-1.5 shadow-md backdrop-blur"
+        aria-label="Инструменты рисования"
+        className="flex w-max items-center gap-0.5 rounded-full border bg-background/95 p-1.5 shadow-md backdrop-blur"
       >
         <ToolBtn active={tool === 'pen'} label="Кисть (P)" onClick={() => onToolChange('pen')}>
           <Pencil className="h-4 w-4" />
@@ -92,7 +84,7 @@ export function Toolbar({
           <Lasso className="h-4 w-4" />
         </ToolBtn>
 
-        <Divider />
+        <VDivider />
 
         <ToolBtn active={tool === 'line'} label="Линия (L)" onClick={() => onToolChange('line')}>
           <Slash className="h-4 w-4" />
@@ -110,7 +102,7 @@ export function Toolbar({
           <Triangle className="h-4 w-4" />
         </ToolBtn>
 
-        <Divider />
+        <VDivider />
 
         {/* 3D-фигуры */}
         <Popover open={shapeOpen} onOpenChange={setShapeOpen}>
@@ -120,12 +112,12 @@ export function Toolbar({
               size="icon"
               aria-label="3D-фигуры с невидимыми линиями"
               title="3D-фигуры (невидимые линии — пунктиром)"
-              className={cn('h-8 w-8 rounded-full shrink-0 gap-0.5', tool === 'shape3d' && 'bg-accent text-accent-foreground')}
+              className={cn('h-8 w-8 rounded-full shrink-0', tool === 'shape3d' && 'bg-accent text-accent-foreground')}
             >
               <Box className="h-4 w-4" />
             </Button>
           </PopoverTrigger>
-          <PopoverContent className="w-72 p-2" side="right" align="center">
+          <PopoverContent className="w-72 p-2" side="top" align="center">
             <div className="px-2 pb-1.5 pt-0.5 text-xs font-medium text-muted-foreground">
               3D-тела — невидимые линии пунктиром
             </div>
@@ -166,7 +158,7 @@ export function Toolbar({
               <LayoutGrid className="h-4 w-4" />
             </Button>
           </PopoverTrigger>
-          <PopoverContent className="w-72 p-1.5" side="right" align="center">
+          <PopoverContent className="w-72 p-1.5" side="top" align="center">
             <div className="px-2 py-1.5 text-xs font-medium text-muted-foreground">Шаблоны — кликните на холсте, чтобы вставить</div>
             {TEMPLATE_ORDER.map((t) => (
               <button
@@ -189,10 +181,20 @@ export function Toolbar({
             ))}
           </PopoverContent>
         </Popover>
+      </div>
+    </div>
+  )
+}
 
-        <Divider />
-
-        {/* Фон: одна кнопка, белый ↔ чёрный (сетка всегда на белом) */}
+/** Служебные кнопки — компактная колонка слева */
+export function SideActions({ bg, onBgToggle, canUndo, canRedo, onUndo, onRedo, onClear, onExport }: SideActionsProps) {
+  return (
+    <div className="pointer-events-auto relative z-20 w-max">
+      <div
+        role="toolbar"
+        aria-label="Служебные кнопки"
+        className="flex w-max flex-col items-center gap-0.5 rounded-full border bg-background/95 p-1.5 shadow-md backdrop-blur"
+      >
         <ToolBtn
           label={bg === 'black' ? 'Белый фон (сетка включена)' : 'Чёрный фон'}
           onClick={onBgToggle}
@@ -200,7 +202,7 @@ export function Toolbar({
           {bg === 'black' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
         </ToolBtn>
 
-        <Divider />
+        <HDivider />
 
         <ToolBtn disabled={!canUndo} label="Отменить (Ctrl+Z)" onClick={onUndo}>
           <Undo2 className="h-4 w-4" />

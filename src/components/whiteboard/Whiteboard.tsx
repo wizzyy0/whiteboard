@@ -20,7 +20,7 @@ import {
   type TemplateKind,
   type ToolKind,
 } from '@/lib/whiteboard/types'
-import { Toolbar } from './Toolbar'
+import { SideActions, ToolsBar } from './Toolbar'
 import { ColorPanel } from './ColorPanel'
 import { Pager } from './Pager'
 
@@ -733,17 +733,11 @@ export default function Whiteboard() {
         </div>
       </main>
 
-      {/* Все инструменты — единая колонка слева; на низких экранах прокручивается */}
+      {/* Служебные кнопки и цвета — компактная колонка слева */}
       <div
-        className="pointer-events-auto absolute left-3 top-1/2 z-20 flex max-h-[calc(100dvh-24px)] -translate-y-1/2 flex-col items-center gap-2 overflow-y-auto no-scrollbar"
+        className="pointer-events-auto absolute left-3 top-3 z-20 flex max-h-[calc(100dvh-24px)] flex-col items-center gap-2 overflow-y-auto no-scrollbar"
       >
-        <Toolbar
-          tool={tool}
-          onToolChange={setTool}
-          shape3d={shape3d}
-          onShape3dChange={setShape3d}
-          template={template}
-          onTemplateChange={setTemplate}
+        <SideActions
           bg={bg}
           onBgToggle={toggleBg}
           canUndo={page.past.length > 0}
@@ -765,6 +759,18 @@ export default function Whiteboard() {
           onStrokeWidthChange={setStrokeWidth}
           lineType={lineType}
           onLineTypeChange={setLineType}
+        />
+      </div>
+
+      {/* Основные инструменты рисования — внизу по центру */}
+      <div className="pointer-events-auto absolute bottom-3 left-1/2 z-20 max-w-[calc(100vw-24px)] -translate-x-1/2 overflow-x-auto no-scrollbar">
+        <ToolsBar
+          tool={tool}
+          onToolChange={setTool}
+          shape3d={shape3d}
+          onShape3dChange={setShape3d}
+          template={template}
+          onTemplateChange={setTemplate}
         />
       </div>
 
