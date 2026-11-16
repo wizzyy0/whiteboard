@@ -40,6 +40,11 @@ interface BaseElement {
   color: string
   strokeWidth: number
   lineType?: LineType
+  /** поворот в радианах вокруг центра bbox (фигуры, штрихи, линии) */
+  rot?: number
+  /** зеркальное отражение вокруг центра bbox по горизонтали / вертикали */
+  flipX?: boolean
+  flipY?: boolean
 }
 
 export type Element = BaseElement &

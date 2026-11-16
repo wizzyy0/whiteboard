@@ -1,8 +1,16 @@
 'use client'
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { applyCamera, drawBackground, drawElement, strokeSelectionBox } from '@/lib/whiteboard/render'
-import { hitTest, lassoSelect, pointInRect, translateElement, unionBbox } from '@/lib/whiteboard/geometry'
+import { applyCamera, drawBackground, drawElement, drawRotateHandle, strokeSelectionBox } from '@/lib/whiteboard/render'
+import {
+  flipElementsAbout,
+  hitTest,
+  lassoSelect,
+  pointInRect,
+  rotateElementsAbout,
+  translateElement,
+  unionBbox,
+} from '@/lib/whiteboard/geometry'
 import { luminance } from '@/lib/whiteboard/color'
 import {
   clampZoom,
@@ -45,6 +53,66 @@ function isEmptyDrawing(el: Element, zoom: number): boolean {
   }
 }
 
+/** Ручка поворота: точка над верхом рамки выделения (мировые координаты) */
+function rotateHandlePos(
+  box: { x: number; y: number; w: number; h: number },
+  zoom: number,
+): Point {
+  return { x: box.x + box.w / 2, y: box.y - 30 / zoom }
+}
+
+/** Кнопка плавающей панели выделения */
+function SelButton({ title, onClick, children }: { title: string; onClick: () => void; children: React.ReactNode }) {
+  return (
+    <button
+      type="button"
+      title={title}
+      aria-label={title}
+      onClick={onClick}
+      className="flex h-8 w-8 items-center justify-center rounded-full text-slate-700 hover:bg-slate-100 active:bg-slate-200"
+    >
+      {children}
+    </button>
+  )
+}
+
+/** Иконки поворота и зеркала */
+function SelIcon({ kind }: { kind: 'ccw' | 'cw' | 'flipH' | 'flipV' }) {
+  const common = { width: 16, height: 16, viewBox: '0 0 16 16', fill: 'none' as const }
+  switch (kind) {
+    case 'ccw':
+      return (
+        <svg {...common}>
+          <path d="M12.7 9.6A5 5 0 1 1 12.4 5.2" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+          <path d="M12.9 1.6 12.5 5.4 8.8 4.7" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      )
+    case 'cw':
+      return (
+        <svg {...common}>
+          <path d="M3.3 9.6A5 5 0 1 0 3.6 5.2" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+          <path d="M3.1 1.6 3.5 5.4 7.2 4.7" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      )
+    case 'flipH':
+      return (
+        <svg {...common}>
+          <path d="M8 1.5v13" stroke="currentColor" strokeWidth="1.4" strokeDasharray="2 2" />
+          <path d="M5.8 5.2 2.6 8l3.2 2.8z" fill="currentColor" />
+          <path d="M10.2 5.2 13.4 8l-3.2 2.8z" fill="currentColor" />
+        </svg>
+      )
+    case 'flipV':
+      return (
+        <svg {...common}>
+          <path d="M1.5 8h13" stroke="currentColor" strokeWidth="1.4" strokeDasharray="2 2" />
+          <path d="M5.2 5.8 8 2.6l2.8 3.2z" fill="currentColor" />
+          <path d="M5.2 10.2 8 13.4l2.8-3.2z" fill="currentColor" />
+        </svg>
+      )
+  }
+}
+
 export default function Whiteboard() {
   const [pages, setPages] = useState<PageState[]>([emptyPage()])
   const [pageIndex, setPageIndex] = useState(0)
@@ -69,6 +137,14 @@ export default function Whiteboard() {
   const eraseRef = useRef<{ last: Point; page: number; snapshot: boolean; removed: Set<string> } | null>(null)
   const panRef = useRef<{ startScreen: Point } | null>(null)
   const moveRef = useRef<{ ids: Set<string>; startWorld: Point; page: number; original: Element[]; dx: number; dy: number } | null>(null)
+  const rotateRef = useRef<{
+    page: number
+    ids: Set<string>
+    pivot: Point
+    startAngle: number
+    original: Element[]
+    delta: number
+  } | null>(null)
   const spaceRef = useRef(false)
   const pointersRef = useRef<Map<number, Point>>(new Map())
   const pinchRef = useRef<{ dist: number; center: Point; cam: Camera } | null>(null)
@@ -150,6 +226,20 @@ export default function Whiteboard() {
         selectionBox.h + pad * 2,
         cam.zoom,
       )
+      // ручка поворота — ножка и рукоятка над рамкой
+      if (tool === 'lasso' && !lasso) {
+        const h = rotateHandlePos(selectionBox, cam.zoom)
+        ctx.save()
+        ctx.strokeStyle = SELECT_COLOR
+        ctx.lineWidth = 1.2 / cam.zoom
+        ctx.setLineDash([])
+        ctx.beginPath()
+        ctx.moveTo(selectionBox.x + selectionBox.w / 2, selectionBox.y - pad)
+        ctx.lineTo(h.x, h.y)
+        ctx.stroke()
+        ctx.restore()
+        drawRotateHandle(ctx, h.x, h.y, cam.zoom)
+      }
     }
     if (lasso && lasso.length > 1) {
       ctx.save()
@@ -162,7 +252,7 @@ export default function Whiteboard() {
       ctx.stroke()
       ctx.restore()
     }
-  }, [size, bg, page, cam, draft, lasso, selectionBox])
+  }, [size, bg, page, cam, draft, lasso, selectionBox, tool])
 
   /* ---------- страницы ---------- */
 
@@ -404,6 +494,7 @@ export default function Whiteboard() {
     drawRef.current = null
     eraseRef.current = null
     moveRef.current = null
+    rotateRef.current = null
     panRef.current = null
     setDraftBoth(null)
     setLasso(null)
@@ -423,6 +514,23 @@ export default function Whiteboard() {
     }))
     setSelectedIds([])
   }, [selectedIds, updatePage])
+
+  /** Поворот выделения на угол (рад) вокруг центра рамки или зеркало относительно её оси */
+  const transformSelection = useCallback(
+    (deltaRot: number | null, flip: 'h' | 'v' | null) => {
+      if (!selectionBox) return
+      const sel = page.elements.filter((el) => selectedSet.has(el.id))
+      if (sel.length === 0) return
+      const pivot = { x: selectionBox.x + selectionBox.w / 2, y: selectionBox.y + selectionBox.h / 2 }
+      const next =
+        deltaRot !== null
+          ? rotateElementsAbout(sel, pivot, deltaRot)
+          : flipElementsAbout(sel, flip === 'h' ? pivot.x : pivot.y, flip === 'h')
+      const byId = new Map(next.map((el) => [el.id, el]))
+      pushElements(safeIndexRef.current, page.elements.map((el) => byId.get(el.id) ?? el))
+    },
+    [selectionBox, page.elements, selectedSet, pushElements],
+  )
 
   const onPointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
     const pScreen = getPos(e)
@@ -453,6 +561,23 @@ export default function Whiteboard() {
     canvasRef.current?.setPointerCapture(e.pointerId)
 
     const p = screenToWorld(pScreen, camRef.current)
+
+    // ручка поворота над рамкой выделения
+    if (tool === 'lasso' && selectionBox) {
+      const h = rotateHandlePos(selectionBox, cam.zoom)
+      if (Math.hypot(p.x - h.x, p.y - h.y) <= 12 / cam.zoom) {
+        const pivot = { x: selectionBox.x + selectionBox.w / 2, y: selectionBox.y + selectionBox.h / 2 }
+        rotateRef.current = {
+          page: safeIndex,
+          ids: new Set(selectedIds),
+          pivot,
+          startAngle: Math.atan2(p.y - pivot.y, p.x - pivot.x),
+          original: page.elements,
+          delta: 0,
+        }
+        return
+      }
+    }
 
     if (tool === 'lasso') {
       // клик внутри рамки выделения — начинаем перетаскивание
@@ -527,6 +652,20 @@ export default function Whiteboard() {
       return
     }
 
+    // вращение выделения за ручку
+    if (rotateRef.current) {
+      const rr = rotateRef.current
+      let delta = Math.atan2(p.y - rr.pivot.y, p.x - rr.pivot.x) - rr.startAngle
+      if (delta > Math.PI) delta -= 2 * Math.PI
+      if (delta <= -Math.PI) delta += 2 * Math.PI
+      if (e.shiftKey) delta = Math.round(delta / (Math.PI / 12)) * (Math.PI / 12) // шаг 15°
+      rr.delta = delta
+      const sel = rr.original.filter((el) => rr.ids.has(el.id))
+      const byId = new Map(rotateElementsAbout(sel, rr.pivot, delta).map((el) => [el.id, el]))
+      updatePage(rr.page, (pp) => ({ ...pp, elements: pp.elements.map((el) => byId.get(el.id) ?? el) }))
+      return
+    }
+
     // перетаскивание выделения
     if (moveRef.current) {
       const mv = moveRef.current
@@ -571,6 +710,21 @@ export default function Whiteboard() {
       const ids = lassoSelect(page.elements, lasso)
       setSelectedIds(ids)
       setLasso(null)
+      return
+    }
+
+    // фиксация вращения в историю
+    if (rotateRef.current) {
+      const rr = rotateRef.current
+      const sel = rr.original.filter((el) => rr.ids.has(el.id))
+      const byId = new Map(rotateElementsAbout(sel, rr.pivot, rr.delta).map((el) => [el.id, el]))
+      updatePage(rr.page, (pp) => ({
+        ...pp,
+        elements: pp.elements.map((el) => byId.get(el.id) ?? el),
+        past: [...pp.past, rr.original].slice(-60),
+        future: [],
+      }))
+      rotateRef.current = null
       return
     }
 
@@ -658,6 +812,7 @@ export default function Whiteboard() {
         setSelectedIds([])
         setLasso(null)
         moveRef.current = null
+        rotateRef.current = null
         setDraftBoth(null)
         drawRef.current = null
       } else if (e.key === 'Delete' || e.key === 'Backspace') {
@@ -732,6 +887,33 @@ export default function Whiteboard() {
             }}
             onContextMenu={(e) => e.preventDefault()}
           />
+
+          {/* Кнопки поворота и зеркала — над рамкой выделения */}
+          {tool === 'lasso' && selectionBox && !lasso && (
+            <div
+              className="absolute z-30"
+              style={{
+                left: (selectionBox.x + selectionBox.w / 2) * cam.zoom + cam.x,
+                top: (selectionBox.y - 30 / cam.zoom) * cam.zoom + cam.y - 14,
+                transform: 'translate(-50%, -100%)',
+              }}
+            >
+              <div className="flex items-center gap-0.5 rounded-full border border-slate-200 bg-white/95 p-1 shadow-md">
+                <SelButton title="Повернуть на 90° влево" onClick={() => transformSelection(-Math.PI / 2, null)}>
+                  <SelIcon kind="ccw" />
+                </SelButton>
+                <SelButton title="Повернуть на 90° вправо" onClick={() => transformSelection(Math.PI / 2, null)}>
+                  <SelIcon kind="cw" />
+                </SelButton>
+                <SelButton title="Отразить по горизонтали" onClick={() => transformSelection(null, 'h')}>
+                  <SelIcon kind="flipH" />
+                </SelButton>
+                <SelButton title="Отразить по вертикали" onClick={() => transformSelection(null, 'v')}>
+                  <SelIcon kind="flipV" />
+                </SelButton>
+              </div>
+            </div>
+          )}
         </div>
       </main>
 

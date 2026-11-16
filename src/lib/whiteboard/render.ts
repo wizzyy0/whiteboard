@@ -1,5 +1,6 @@
 import type { BgMode, Camera, Element, LineType, Shape3D, TemplateKind } from './types'
 import { normRect } from './types'
+import { elTf, type ElTf } from './geometry'
 
 export const GRID_SIZE = 28
 export const GRID_COLOR = '#dcdcdc'
@@ -188,7 +189,8 @@ function labelFontSize(size: number): number {
   return Math.min(Math.max(size * 0.14, 12), 34)
 }
 
-/** Подпись вершины «как в учебнике»: курсивная буква, при sub — нижний индекс (A₁) */
+/** Подпись вершины «как в учебнике»: курсивная буква, при sub — нижний индекс (A₁).
+ * При повороте/зеркале фигуры буквы компенсируются вокруг точки подписи — остаются читаемыми */
 function vertexLabel(
   ctx: CanvasRenderingContext2D,
   letter: string,
@@ -197,9 +199,16 @@ function vertexLabel(
   py: number,
   fs: number,
   align: CanvasTextAlign,
+  tf: ElTf | null = null,
 ) {
   ctx.save()
   ctx.setLineDash([])
+  if (tf) {
+    ctx.translate(px, py)
+    ctx.scale(tf.fx, tf.fy)
+    ctx.rotate(-tf.rot)
+    ctx.translate(-px, -py)
+  }
   ctx.textAlign = align
   ctx.textBaseline = 'middle'
   ctx.font = `italic ${fs}px Georgia, 'Times New Roman', serif`
@@ -221,6 +230,7 @@ export function drawShape3D(
   w0: number,
   h0: number,
   zoom = 1,
+  tf: ElTf | null = null,
 ) {
   // нормализация к положительным размерам
   let x = x0
@@ -265,14 +275,14 @@ export function drawShape3D(
       solid(ctx)
       const fs = labelFontSize(Math.min(s, sh))
       const m = fs * 0.55
-      vertexLabel(ctx, 'A', null, x - m * 0.8, y2 + m * 0.8, fs, 'right')
-      vertexLabel(ctx, 'B', null, x + dx - m, y2 + dy - m * 0.3, fs, 'right')
-      vertexLabel(ctx, 'C', null, x2 + dx + m, y2 + dy, fs, 'left')
-      vertexLabel(ctx, 'D', null, x2 + m * 0.8, y2 + m * 0.8, fs, 'left')
-      vertexLabel(ctx, 'A', '1', x - m, y + m * 0.5, fs, 'right')
-      vertexLabel(ctx, 'B', '1', x + dx, y + dy - m * 1.2, fs, 'center')
-      vertexLabel(ctx, 'C', '1', x2 + dx + m, y + dy - m * 0.4, fs, 'left')
-      vertexLabel(ctx, 'D', '1', x2 - m * 0.6, y - m * 0.9, fs, 'center')
+      vertexLabel(ctx, 'A', null, x - m * 0.8, y2 + m * 0.8, fs, 'right', tf)
+      vertexLabel(ctx, 'B', null, x + dx - m, y2 + dy - m * 0.3, fs, 'right', tf)
+      vertexLabel(ctx, 'C', null, x2 + dx + m, y2 + dy, fs, 'left', tf)
+      vertexLabel(ctx, 'D', null, x2 + m * 0.8, y2 + m * 0.8, fs, 'left', tf)
+      vertexLabel(ctx, 'A', '1', x - m, y + m * 0.5, fs, 'right', tf)
+      vertexLabel(ctx, 'B', '1', x + dx, y + dy - m * 1.2, fs, 'center', tf)
+      vertexLabel(ctx, 'C', '1', x2 + dx + m, y + dy - m * 0.4, fs, 'left', tf)
+      vertexLabel(ctx, 'D', '1', x2 - m * 0.6, y - m * 0.9, fs, 'center', tf)
       break
     }
     case 'pyramid': {
@@ -297,11 +307,11 @@ export function drawShape3D(
       solid(ctx)
       const fs = labelFontSize(Math.min(w, h))
       const m = fs * 0.55
-      vertexLabel(ctx, 'A', null, bl.x - m * 0.8, bl.y + m * 0.8, fs, 'right')
-      vertexLabel(ctx, 'B', null, br.x + m * 0.8, br.y + m * 0.8, fs, 'left')
-      vertexLabel(ctx, 'C', null, brp.x + m, brp.y, fs, 'left')
-      vertexLabel(ctx, 'D', null, blp.x - m, blp.y - m * 0.4, fs, 'right')
-      vertexLabel(ctx, 'S', null, apex.x, apex.y - m * 1.4, fs, 'center')
+      vertexLabel(ctx, 'A', null, bl.x - m * 0.8, bl.y + m * 0.8, fs, 'right', tf)
+      vertexLabel(ctx, 'B', null, br.x + m * 0.8, br.y + m * 0.8, fs, 'left', tf)
+      vertexLabel(ctx, 'C', null, brp.x + m, brp.y, fs, 'left', tf)
+      vertexLabel(ctx, 'D', null, blp.x - m, blp.y - m * 0.4, fs, 'right', tf)
+      vertexLabel(ctx, 'S', null, apex.x, apex.y - m * 1.4, fs, 'center', tf)
       break
     }
     case 'prism': {
@@ -329,12 +339,12 @@ export function drawShape3D(
       solid(ctx)
       const fs = labelFontSize(Math.min(w, h))
       const m = fs * 0.55
-      vertexLabel(ctx, 'A', null, bl.x - m * 0.8, bl.y + m * 0.8, fs, 'right')
-      vertexLabel(ctx, 'B', null, br.x + m * 0.8, br.y + m * 0.8, fs, 'left')
-      vertexLabel(ctx, 'C', null, top.x, top.y - m * 1.3, fs, 'center')
-      vertexLabel(ctx, 'A', '1', blp.x - m, blp.y - m * 0.4, fs, 'right')
-      vertexLabel(ctx, 'B', '1', brp.x + m, brp.y, fs, 'left')
-      vertexLabel(ctx, 'C', '1', topp.x + m, topp.y - m * 0.4, fs, 'left')
+      vertexLabel(ctx, 'A', null, bl.x - m * 0.8, bl.y + m * 0.8, fs, 'right', tf)
+      vertexLabel(ctx, 'B', null, br.x + m * 0.8, br.y + m * 0.8, fs, 'left', tf)
+      vertexLabel(ctx, 'C', null, top.x, top.y - m * 1.3, fs, 'center', tf)
+      vertexLabel(ctx, 'A', '1', blp.x - m, blp.y - m * 0.4, fs, 'right', tf)
+      vertexLabel(ctx, 'B', '1', brp.x + m, brp.y, fs, 'left', tf)
+      vertexLabel(ctx, 'C', '1', topp.x + m, topp.y - m * 0.4, fs, 'left', tf)
       break
     }
     case 'cylinder': {
@@ -505,6 +515,15 @@ export function drawElement(ctx: CanvasRenderingContext2D, el: Element, zoom = 1
   ctx.setLineDash([])
   const lt: LineType = el.lineType ?? 'solid'
 
+  // поворот и зеркало — вокруг центра bbox; шаблоны не трансформируем
+  const tf = el.kind === 'template' ? null : elTf(el)
+  if (tf) {
+    ctx.translate(tf.cx, tf.cy)
+    ctx.rotate(tf.rot)
+    ctx.scale(tf.fx, tf.fy)
+    ctx.translate(-tf.cx, -tf.cy)
+  }
+
   switch (el.kind) {
     case 'pen': {
       if (lt === 'wavy') {
@@ -613,7 +632,7 @@ export function drawElement(ctx: CanvasRenderingContext2D, el: Element, zoom = 1
       break
     }
     case 'shape3d':
-      drawShape3D(ctx, el.shape, el.x, el.y, el.w, el.h, zoom)
+      drawShape3D(ctx, el.shape, el.x, el.y, el.w, el.h, zoom, tf)
       break
     case 'template':
       drawTemplate(
@@ -652,4 +671,18 @@ export function strokeSelectionBox(
   zoom: number,
 ) {
   dashedRect(ctx, x, y, w, h, zoom)
+}
+
+/** Ручка поворота: круглая рукоятка над рамкой выделения */
+export function drawRotateHandle(ctx: CanvasRenderingContext2D, x: number, y: number, zoom: number) {
+  ctx.save()
+  ctx.strokeStyle = SELECT_COLOR
+  ctx.fillStyle = '#ffffff'
+  ctx.lineWidth = 1.5 / zoom
+  ctx.setLineDash([])
+  ctx.beginPath()
+  ctx.arc(x, y, 5.5 / zoom, 0, Math.PI * 2)
+  ctx.fill()
+  ctx.stroke()
+  ctx.restore()
 }
