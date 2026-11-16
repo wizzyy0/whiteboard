@@ -59,3 +59,10 @@ server.log
 /download
 /agent-ctx
 whiteboard-github.zip
+
+# локальная инфраструктура песочницы (в репозиторий не входит)
+/.zscripts/
+/scripts/
+/Caddyfile
+/.env
+/.env.*
