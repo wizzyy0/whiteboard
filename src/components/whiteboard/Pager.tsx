@@ -25,7 +25,7 @@ export function Pager({ count, index, onPrev, onNext, onAdd, onDelete, zoom, onZ
     <div
       role="toolbar"
       aria-label="Холсты и масштаб"
-      className="pointer-events-auto absolute bottom-3 right-3 z-20 flex items-center gap-0.5 rounded-full border bg-background/95 p-1.5 shadow-md backdrop-blur"
+      className="pointer-events-auto absolute bottom-[calc(4.25rem_+_env(safe-area-inset-bottom))] right-2 z-20 flex items-center gap-0.5 rounded-full border bg-background/95 p-1.5 shadow-md backdrop-blur lg:bottom-3 lg:right-3"
     >
       {/* Масштаб: слева от «+» (добавление холста), 10%..900% */}
       <Button

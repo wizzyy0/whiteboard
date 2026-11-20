@@ -68,7 +68,7 @@ export function ToolsBar({ tool, onToolChange, shape3d, onShape3dChange, templat
   const [templateOpen, setTemplateOpen] = useState(false)
 
   return (
-    <div className="pointer-events-auto relative z-20 w-max">
+    <div className="pointer-events-auto relative z-20 mx-auto w-max">
       <div
         role="toolbar"
         aria-label="Инструменты рисования"

@@ -115,6 +115,36 @@ function SelIcon({ kind }: { kind: 'ccw' | 'cw' | 'flipH' | 'flipV' }) {
   }
 }
 
+/** Кнопка вкл/выкл подписей вершин: на телефоне живёт в колонке слева, на десктопе — в углу */
+function LabelsToggle({
+  showLabels,
+  onToggle,
+  className,
+}: {
+  showLabels: boolean
+  onToggle: () => void
+  className?: string
+}) {
+  return (
+    <button
+      type="button"
+      aria-pressed={showLabels}
+      aria-label={showLabels ? 'Скрыть подписи вершин (A₁B₁C₁D₁)' : 'Показать подписи вершин (A₁B₁C₁D₁)'}
+      title={showLabels ? 'Скрыть подписи вершин (A₁B₁C₁D₁)' : 'Показать подписи вершин (A₁B₁C₁D₁)'}
+      onClick={onToggle}
+      className={cn(
+        'h-9 w-9 items-center justify-center rounded-full border shadow-md backdrop-blur',
+        showLabels
+          ? 'border-accent bg-accent text-accent-foreground'
+          : 'border-slate-200 bg-background/95 text-muted-foreground',
+        className,
+      )}
+    >
+      <Type className="h-4 w-4" aria-hidden="true" />
+    </button>
+  )
+}
+
 export default function Whiteboard() {
   const [pages, setPages] = useState<PageState[]>([emptyPage()])
   const [pageIndex, setPageIndex] = useState(0)
@@ -920,9 +950,10 @@ export default function Whiteboard() {
         </div>
       </main>
 
-      {/* Служебные кнопки и цвета — компактная колонка слева внизу */}
+      {/* Служебные кнопки и цвета — компактная колонка слева.
+          На телефоне поднята над рядами инструментов и масштаба */}
       <div
-        className="pointer-events-auto absolute bottom-16 left-3 z-20 flex max-h-[calc(100dvh-88px)] flex-col items-center gap-2 overflow-y-auto no-scrollbar"
+        className="pointer-events-auto absolute bottom-[calc(8rem_+_env(safe-area-inset-bottom))] left-2 z-20 flex max-h-[calc(100dvh-160px)] flex-col items-center gap-2 overflow-y-auto no-scrollbar lg:bottom-16 lg:left-3 lg:max-h-[calc(100dvh-88px)]"
       >
         <SideActions
           bg={bg}
@@ -947,27 +978,25 @@ export default function Whiteboard() {
           lineType={lineType}
           onLineTypeChange={setLineType}
         />
+
+        {/* Переключатель подписей вершин — на телефоне внизу колонки */}
+        <LabelsToggle
+          showLabels={showLabels}
+          onToggle={() => setShowLabels((v) => !v)}
+          className="mt-1 flex shrink-0 lg:hidden"
+        />
       </div>
 
-      {/* Переключатель подписей вершин — в пустом углу слева внизу */}
-      <button
-        type="button"
-        aria-pressed={showLabels}
-        aria-label={showLabels ? 'Скрыть подписи вершин (A₁B₁C₁D₁)' : 'Показать подписи вершин (A₁B₁C₁D₁)'}
-        title={showLabels ? 'Скрыть подписи вершин (A₁B₁C₁D₁)' : 'Показать подписи вершин (A₁B₁C₁D₁)'}
-        onClick={() => setShowLabels((v) => !v)}
-        className={cn(
-          'pointer-events-auto absolute bottom-3 left-3 z-20 flex h-9 w-9 items-center justify-center rounded-full border shadow-md backdrop-blur',
-          showLabels
-            ? 'border-accent bg-accent text-accent-foreground'
-            : 'border-slate-200 bg-background/95 text-muted-foreground',
-        )}
-      >
-        <Type className="h-4 w-4" aria-hidden="true" />
-      </button>
+      {/* Переключатель подписей вершин — в пустом углу слева внизу (десктоп) */}
+      <LabelsToggle
+        showLabels={showLabels}
+        onToggle={() => setShowLabels((v) => !v)}
+        className="absolute bottom-3 left-3 z-20 hidden lg:flex"
+      />
 
-      {/* Основные инструменты рисования — внизу по центру */}
-      <div className="pointer-events-auto absolute bottom-3 left-1/2 z-20 max-w-[calc(100vw-24px)] -translate-x-1/2 overflow-x-auto no-scrollbar">
+      {/* Основные инструменты рисования: на телефоне — ряд во всю ширину внизу,
+          на десктопе — внизу по центру */}
+      <div className="pointer-events-auto absolute bottom-[calc(0.5rem_+_env(safe-area-inset-bottom))] left-2 right-2 z-20 overflow-x-auto no-scrollbar lg:bottom-3 lg:left-1/2 lg:right-auto lg:max-w-[calc(100vw-24px)] lg:-translate-x-1/2">
         <ToolsBar
           tool={tool}
           onToolChange={setTool}
